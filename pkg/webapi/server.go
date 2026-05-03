@@ -33,6 +33,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/chrissnell/graywolf/pkg/actions"
 	"github.com/chrissnell/graywolf/pkg/ax25conn"
 	"github.com/chrissnell/graywolf/pkg/configstore"
 	"github.com/chrissnell/graywolf/pkg/igate"
@@ -98,6 +99,22 @@ type Server struct {
 	// the AX.25 terminal raw-tail mode. Wired post-construction via
 	// SetPacketLog so cmd/graywolf can build it once and share it.
 	packetLog *packetlog.Log
+
+	// actions is the Actions subsystem. Wired post-construction via
+	// SetActionsService once pkg/app builds the service. Listener-
+	// addressee mutations call ReloadListeners on it after the store
+	// write. Test-fire dispatches the runtime invocation through it.
+	// Nil until set; mutating handlers no-op the reload, test-fire
+	// returns 503.
+	actions ActionsService
+}
+
+// ActionsService is the narrow surface the webapi handlers consume
+// from pkg/actions.Service. Listener-addressee mutations call
+// ReloadListeners; the test-fire endpoint calls TestFire.
+type ActionsService interface {
+	ReloadListeners(ctx context.Context) error
+	TestFire(ctx context.Context, a *configstore.Action, args []actions.KeyValue) (actions.Result, uint)
 }
 
 // MessagesService is the narrow surface the webapi handlers consume
@@ -240,6 +257,11 @@ func (s *Server) RegisterRoutes(mux *http.ServeMux) {
 	s.registerMaps(mux)
 	s.registerCatalog(mux)
 	s.registerDownloads(mux)
+	s.registerActions(mux)
+	s.registerOTPCredentials(mux)
+	s.registerActionListeners(mux)
+	s.registerActionInvocations(mux)
+	s.registerActionTestFire(mux)
 
 	mux.HandleFunc("GET /api/health", s.handleHealth)
 	mux.HandleFunc("GET /api/status", s.handleStatus)
@@ -351,6 +373,13 @@ func (s *Server) SetAX25Manager(m *ax25conn.Manager) { s.ax25Mgr = m }
 // terminal raw-tail mode can fan out live decodes. Until this is set
 // the bridge surfaces a typed `raw_tail_unsupported` error envelope.
 func (s *Server) SetPacketLog(l *packetlog.Log) { s.packetLog = l }
+
+// SetActionsService installs the running Actions subsystem so the
+// listener-addressee handlers can signal a reload after mutations and
+// the test-fire handler can dispatch through the runtime path. Nil
+// until pkg/app wiring sets it; mutating listener handlers skip the
+// reload signal when nil.
+func (s *Server) SetActionsService(svc ActionsService) { s.actions = svc }
 
 // SetIgateStatusFn installs the function used by /api/status to report
 // igate counters.
