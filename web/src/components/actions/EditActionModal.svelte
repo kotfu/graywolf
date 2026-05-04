@@ -419,9 +419,22 @@
               id="action-body"
               class="textarea code"
               rows="4"
-              placeholder="Default: form-encoded args. Use {`{{arg.key}}`} for token expansion."
+              placeholder={form.arg_mode === 'freeform'
+                ? `Default: form body with arg=<freeform payload>. Use {{arg}} for token expansion.`
+                : `Default: form-encoded args (one field per kv key). Use {{arg.key}} for token expansion.`}
               bind:value={form.webhook_body_template}
             ></textarea>
+            <p class="hint">
+              {#if form.arg_mode === 'freeform'}
+                Freeform mode: the sender's payload is exposed as
+                <code>{'{{arg}}'}</code>. Default body sends a single
+                <code>arg=&lt;payload&gt;</code> form field.
+              {:else}
+                kv mode: each schema key is exposed as
+                <code>{'{{arg.<key>}}'}</code>. Default body sends one
+                form field per kv argument.
+              {/if}
+            </p>
           </div>
         {/if}
 
@@ -511,10 +524,10 @@
         </details>
       {:else}
         <div class="webhook-arg-help">
-          <p>graywolf passes arguments via the form body (POST) or URL tokens (GET).</p>
+          <p>Graywolf passes arguments via the form body (POST) or URL tokens (GET).</p>
           <p>
             <a
-              href="/handbook/actions-handler-safety-webhooks.html#argument-passing"
+              href="https://chrissnell.com/docs/graywolf/actions-handler-safety-webhooks.html#argument-passing"
               target="_blank"
               rel="noopener"
             >How webhook arguments are passed &rarr;</a>
