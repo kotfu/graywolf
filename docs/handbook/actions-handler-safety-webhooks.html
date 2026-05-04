@@ -79,12 +79,12 @@ read it first if you haven't.</p>
 
 <h2 id="argument-passing">How webhook arguments are passed</h2>
 
-<p>How graywolf hands the sender's data to your endpoint depends on
+<p>How Graywolf hands the sender's data to your endpoint depends on
 the HTTP method and whether you supplied a custom body template.</p>
 
 <h3 id="argument-passing-get">GET</h3>
 
-<p>graywolf does not send a request body for GET. The only place to
+<p>Graywolf does not send a request body for GET. The only place to
 inject sender data is in the URL itself, via template tokens. Always
 pipe argument values through the <code>|url</code> filter so reserved
 characters (spaces, ampersands, equals signs) get percent-encoded:</p>
@@ -99,7 +99,7 @@ metadata such as a callsign or correlation id.</p>
 
 <h3 id="argument-passing-post-default">POST (default form body)</h3>
 
-<p>If you leave the body template blank, graywolf sends an
+<p>If you leave the body template blank, Graywolf sends an
 <code>application/x-www-form-urlencoded</code> body. The framework on
 your receiver will parse it for you and you do not need to template
 anything. The form fields are:</p>
@@ -119,7 +119,7 @@ anything. The form fields are:</p>
 <h3 id="argument-passing-post-template">POST (custom body template)</h3>
 
 <p>Fill in the body template field on the Action when your downstream
-expects something other than form encoding (e.g. JSON). graywolf
+expects something other than form encoding (e.g. JSON). Graywolf
 substitutes these tokens before sending the body:</p>
 
 <table>
@@ -145,7 +145,7 @@ the filter list and worked examples.</p>
 
 <h2 id="webhook">SMS as a webhook Action</h2>
 
-<p>graywolf POSTs the form-encoded body to your URL. The Action is
+<p>Graywolf POSTs the form-encoded body to your URL. The Action is
 configured as:</p>
 
 <ul>
@@ -202,7 +202,7 @@ def aprs_webhook():
 <h3>Explanation</h3>
 
 <p><strong>Authenticate the inbound POST.</strong> Your webhook URL
-is in graywolf's database, and graywolf is the only thing that knows
+is in Graywolf's database, and Graywolf is the only thing that knows
 the shared secret you set in <code>X-Graywolf-Auth</code>. Anything
 else hitting your endpoint should get a 401 immediately.
 <code>hmac.compare_digest</code> compares in constant time so an
@@ -210,20 +210,20 @@ attacker can't measure timing to brute-force the secret one byte at a
 time.</p>
 
 <p><strong>Cap the body size <em>before</em> parsing it.</strong>
-graywolf already limits payload bytes, but a bug or downgrade attack
-on graywolf's side shouldn't be able to OOM your receiver. The
+Graywolf already limits payload bytes, but a bug or downgrade attack
+on Graywolf's side shouldn't be able to OOM your receiver. The
 <code>before_request</code> hook bails on
 <code>Content-Length</code> too high.</p>
 
-<p><strong>Use form-encoded input, not JSON.</strong> graywolf's
+<p><strong>Use form-encoded input, not JSON.</strong> Graywolf's
 default body is <code>application/x-www-form-urlencoded</code>, which
 the framework parses for you with no eval involved. JSON parsing is
 also fine, but only because Python's <code>json.loads</code> doesn't
 eval &mdash; never <code>eval(request.body)</code>.</p>
 
 <p><strong>Revalidate.</strong> Same length-and-control-char floor
-as the shell example. Even though graywolf already validated, your
-receiver shouldn't depend on graywolf staying bug-free forever.</p>
+as the shell example. Even though Graywolf already validated, your
+receiver shouldn't depend on Graywolf staying bug-free forever.</p>
 
 <p><strong>Parameterized SQL.</strong> The two <code>?</code>
 placeholders are bound by the SQLite driver. The string
@@ -263,7 +263,7 @@ would contain <code>&amp;lt;script&amp;gt;</code>, not a real
     </tr>
     <tr>
       <td>No auth on the endpoint</td>
-      <td>Anyone on the internet can POST as if they were graywolf.</td>
+      <td>Anyone on the internet can POST as if they were Graywolf.</td>
     </tr>
     <tr>
       <td>Logging payload without escaping CR/LF</td>
@@ -275,7 +275,7 @@ would contain <code>&amp;lt;script&amp;gt;</code>, not a real
 <h2 id="custom-template">Custom webhook body templates</h2>
 
 <p>Most operators should leave the body template blank and use
-graywolf's default form encoding &mdash; the framework handles escaping
+Graywolf's default form encoding &mdash; the framework handles escaping
 correctly and there's nothing to get wrong. If you need a custom
 template (e.g., a downstream API expects JSON), use the filter
 syntax:</p>
