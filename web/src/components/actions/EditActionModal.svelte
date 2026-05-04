@@ -309,40 +309,48 @@
     {/if}
 
     <div class="form">
-      <div class="field">
-        <label for="action-name">Name <span class="req">*</span></label>
-        <Input
-          id="action-name"
-          type="text"
-          bind:value={form.name}
-          onblur={validateName}
-          class={nameError || fieldErrors.name ? 'field-invalid' : ''}
-        />
-        <p class="hint">Used as keyword in the message. Letters, digits, dot, dash, underscore.</p>
-        {#if nameError}<p class="field-error">{nameError}</p>{/if}
-        {#if fieldErrors.name}<p class="field-error">{fieldErrors.name}</p>{/if}
-      </div>
-
-      <div class="field">
-        <label for="action-desc">Description</label>
-        <textarea
-          id="action-desc"
-          class="textarea"
-          rows="2"
-          bind:value={form.description}
-        ></textarea>
-      </div>
-
-      <div class="field">
-        <span class="label">Type <span class="req">*</span></span>
-        <RadioGroup bind:value={form.type}>
-          <div class="radio-row">
-            <Radio value="command" label="Command" />
-            <Radio value="webhook" label="Webhook" />
+      <section class="form-section">
+        <h4 class="form-section__title">Identity</h4>
+        <div class="form-section__body">
+          <div class="field">
+            <label for="action-name">Name <span class="req">*</span></label>
+            <Input
+              id="action-name"
+              type="text"
+              bind:value={form.name}
+              onblur={validateName}
+              class={nameError || fieldErrors.name ? 'field-invalid' : ''}
+            />
+            <p class="hint">Used as keyword in the message. Letters, digits, dot, dash, underscore.</p>
+            {#if nameError}<p class="field-error">{nameError}</p>{/if}
+            {#if fieldErrors.name}<p class="field-error">{fieldErrors.name}</p>{/if}
           </div>
-        </RadioGroup>
-      </div>
 
+          <div class="field">
+            <label for="action-desc">Description</label>
+            <textarea
+              id="action-desc"
+              class="textarea"
+              rows="2"
+              bind:value={form.description}
+            ></textarea>
+          </div>
+
+          <div class="field">
+            <span class="label">Type <span class="req">*</span></span>
+            <RadioGroup bind:value={form.type}>
+              <div class="radio-row">
+                <Radio value="command" label="Command" />
+                <Radio value="webhook" label="Webhook" />
+              </div>
+            </RadioGroup>
+          </div>
+        </div>
+      </section>
+
+      <section class="form-section">
+        <h4 class="form-section__title">{form.type === 'command' ? 'Command' : 'Webhook'}</h4>
+        <div class="form-section__body">
       {#if form.type === 'command'}
         <div class="field">
           <label for="action-cmd">Command path <span class="req">*</span></label>
@@ -356,73 +364,6 @@
           <p class="hint">Absolute path to the executable. Validated when you save.</p>
           {#if fieldErrors.command_path}<p class="field-error">{fieldErrors.command_path}</p>{/if}
         </div>
-
-        <div class="field">
-          <ArgModeSelect bind:value={form.arg_mode} />
-          <ArgSchemaEditor
-            bind:argSchema={form.arg_schema}
-            mode={form.arg_mode}
-            bind:this={argEditor}
-          />
-        </div>
-
-        <details class="exec-help">
-          <summary>How your command is invoked</summary>
-          <div class="exec-help-body">
-            {#if form.arg_mode === 'freeform'}
-              <pre class="exec-cli">&lt;command&gt; &lt;action name&gt; &lt;sender callsign&gt; &lt;otp verified&gt; &lt;freeform payload&gt;</pre>
-
-              <h4>Arguments (positional)</h4>
-              <dl>
-                <dt><code>$1</code></dt><dd>action name</dd>
-                <dt><code>$2</code></dt><dd>sender callsign</dd>
-                <dt><code>$3</code></dt><dd><code>true</code> or <code>false</code> -- whether the TOTP code validated</dd>
-                <dt><code>$4</code></dt><dd>the freeform payload (everything after the verb, as one string)</dd>
-              </dl>
-
-              <h4>Environment</h4>
-              <dl>
-                <dt><code>GW_ACTION_NAME</code></dt><dd>same as <code>$1</code></dd>
-                <dt><code>GW_SENDER_CALL</code></dt><dd>same as <code>$2</code></dd>
-                <dt><code>GW_OTP_VERIFIED</code></dt><dd>same as <code>$3</code></dd>
-                <dt><code>GW_OTP_CRED_NAME</code></dt><dd>name of the credential that validated the code (empty if OTP not required)</dd>
-                <dt><code>GW_SOURCE</code></dt><dd>where the trigger arrived from (e.g. <code>aprs</code>, <code>test</code>)</dd>
-                <dt><code>GW_INVOCATION_ID</code></dt><dd>numeric id of the audit row for this run</dd>
-                <dt><code>GW_ARG</code></dt><dd>same as <code>$4</code> -- the freeform payload</dd>
-                <dt><code>PATH</code></dt><dd>preset to <code>/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin</code>. The parent process environment is <strong>not</strong> inherited.</dd>
-              </dl>
-            {:else}
-              <pre class="exec-cli">&lt;command&gt; &lt;action name&gt; &lt;sender callsign&gt; &lt;otp verified&gt; [&lt;key=value&gt; &lt;key=value&gt; ...]</pre>
-
-              <h4>Arguments (positional)</h4>
-              <dl>
-                <dt><code>$1</code></dt><dd>action name</dd>
-                <dt><code>$2</code></dt><dd>sender callsign</dd>
-                <dt><code>$3</code></dt><dd><code>true</code> or <code>false</code> -- whether the TOTP code validated</dd>
-                <dt><code>$4+</code></dt><dd>one <code>key=value</code> per arg-schema entry, in the order the sender supplied them</dd>
-              </dl>
-
-              <h4>Environment</h4>
-              <dl>
-                <dt><code>GW_ACTION_NAME</code></dt><dd>same as <code>$1</code></dd>
-                <dt><code>GW_SENDER_CALL</code></dt><dd>same as <code>$2</code></dd>
-                <dt><code>GW_OTP_VERIFIED</code></dt><dd>same as <code>$3</code></dd>
-                <dt><code>GW_OTP_CRED_NAME</code></dt><dd>name of the credential that validated the code (empty if OTP not required)</dd>
-                <dt><code>GW_SOURCE</code></dt><dd>where the trigger arrived from (e.g. <code>aprs</code>, <code>test</code>)</dd>
-                <dt><code>GW_INVOCATION_ID</code></dt><dd>numeric id of the audit row for this run</dd>
-                <dt><code>GW_ARG_&lt;KEY&gt;</code></dt><dd>one per arg, key uppercased, non-alphanumerics turned into <code>_</code></dd>
-                <dt><code>PATH</code></dt><dd>preset to <code>/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin</code>. The parent process environment is <strong>not</strong> inherited.</dd>
-              </dl>
-            {/if}
-
-            <h4>Runtime</h4>
-            <ul>
-              <li>Working directory: the value above, otherwise the directory containing the command.</li>
-              <li>Timeout: the value above. SIGTERM on expiry, SIGKILL 2 seconds later.</li>
-              <li>Output: stdout and stderr are merged; the first 4 KiB are captured and the leading characters are echoed back to the sender as the APRS reply.</li>
-            </ul>
-          </div>
-        </details>
 
         <div class="field">
           <label for="action-wd">Working directory</label>
@@ -484,15 +425,6 @@
           </div>
         {/if}
 
-        <div class="field">
-          <ArgModeSelect bind:value={form.arg_mode} />
-          <ArgSchemaEditor
-            bind:argSchema={form.arg_schema}
-            mode={form.arg_mode}
-            bind:this={argEditor}
-          />
-        </div>
-
         <div class="field narrow">
           <label for="action-wh-timeout">Timeout (s)</label>
           <Input
@@ -504,76 +436,167 @@
           />
         </div>
       {/if}
+        </div>
+      </section>
 
-      <div class="field">
-        <span class="label">OTP</span>
-        <Toggle bind:checked={form.otp_required} label="Require valid one-time code" />
-        {#if form.otp_required}
-          <div class="otp-cred">
-            <Select
-              bind:value={credSelectValue}
-              options={credOptions}
-              onValueChange={onCredChange}
-              class={fieldErrors.otp_credential_id ? 'field-invalid' : ''}
+      <section class="form-section">
+        <h4 class="form-section__title">Arguments</h4>
+        <div class="form-section__body">
+          <div class="field">
+            <ArgModeSelect bind:value={form.arg_mode} />
+            <ArgSchemaEditor
+              bind:argSchema={form.arg_schema}
+              mode={form.arg_mode}
+              bind:this={argEditor}
             />
-            <button
-              type="button"
-              class="link"
-              onclick={() => onManageCredentials?.()}
-            >+ Manage credentials</button>
           </div>
-          {#if fieldErrors.otp_credential_id}
-            <p class="field-error">{fieldErrors.otp_credential_id}</p>
-          {/if}
-        {/if}
-      </div>
 
-      <div class="field">
-        <label for="action-allowlist">Sender allowlist</label>
-        <SenderAllowlistEditor bind:value={form.sender_allowlist} />
-        <p class="hint">Comma-separated callsigns or <code>CALL-*</code> wildcards. Empty = anyone (OTP still applies).</p>
-      </div>
+      {#if form.type === 'command'}
+        <details class="exec-help">
+          <summary>How your command is invoked</summary>
+          <div class="exec-help-body">
+            {#if form.arg_mode === 'freeform'}
+              <pre class="exec-cli">&lt;command&gt; &lt;action name&gt; &lt;sender callsign&gt; &lt;otp verified&gt; &lt;freeform payload&gt;</pre>
 
-      <div class="field narrow">
-        <label for="action-rate">Rate limit (s)</label>
-        <Input
-          id="action-rate"
-          type="number"
-          min="0"
-          bind:value={form.rate_limit_sec}
-        />
-        <p class="hint">Seconds between consecutive invocations.</p>
-      </div>
+              <h4>Arguments (positional)</h4>
+              <dl>
+                <dt><code>$1</code></dt><dd>action name</dd>
+                <dt><code>$2</code></dt><dd>sender callsign</dd>
+                <dt><code>$3</code></dt><dd><code>true</code> or <code>false</code> -- whether the TOTP code validated</dd>
+                <dt><code>$4</code></dt><dd>the freeform payload (everything after the verb, as one string)</dd>
+              </dl>
 
-      <div class="field narrow">
-        <label for="action-queue">Queue depth</label>
-        <Input
-          id="action-queue"
-          type="number"
-          min="0"
-          max="32"
-          bind:value={form.queue_depth}
-        />
-        <p class="hint">
-          When an Action is already running and another invocation arrives, this
-          many requests can wait in line. Beyond that the sender gets a
-          <code>busy</code> reply. Set to 0 to allow parallel runs (use only for
-          read-only commands).
-        </p>
-      </div>
+              <h4>Environment</h4>
+              <dl>
+                <dt><code>GW_ACTION_NAME</code></dt><dd>same as <code>$1</code></dd>
+                <dt><code>GW_SENDER_CALL</code></dt><dd>same as <code>$2</code></dd>
+                <dt><code>GW_OTP_VERIFIED</code></dt><dd>same as <code>$3</code></dd>
+                <dt><code>GW_OTP_CRED_NAME</code></dt><dd>name of the credential that validated the code (empty if OTP not required)</dd>
+                <dt><code>GW_SOURCE</code></dt><dd>where the trigger arrived from (e.g. <code>aprs</code>, <code>test</code>)</dd>
+                <dt><code>GW_INVOCATION_ID</code></dt><dd>numeric id of the audit row for this run</dd>
+                <dt><code>GW_ARG</code></dt><dd>same as <code>$4</code> -- the freeform payload</dd>
+                <dt><code>PATH</code></dt><dd>preset to <code>/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin</code>. The parent process environment is <strong>not</strong> inherited.</dd>
+              </dl>
+            {:else}
+              <pre class="exec-cli">&lt;command&gt; &lt;action name&gt; &lt;sender callsign&gt; &lt;otp verified&gt; [&lt;key=value&gt; &lt;key=value&gt; ...]</pre>
 
-      <div class="field">
-        <span class="label">Status</span>
-        <Toggle bind:checked={form.enabled} label="Action is enabled" />
-        <p class="hint">Disabled Actions still appear here but never fire; senders get a <code>disabled</code> reply.</p>
-      </div>
+              <h4>Arguments (positional)</h4>
+              <dl>
+                <dt><code>$1</code></dt><dd>action name</dd>
+                <dt><code>$2</code></dt><dd>sender callsign</dd>
+                <dt><code>$3</code></dt><dd><code>true</code> or <code>false</code> -- whether the TOTP code validated</dd>
+                <dt><code>$4+</code></dt><dd>one <code>key=value</code> per arg-schema entry, in the order the sender supplied them</dd>
+              </dl>
 
-      <div class="field">
-        <span class="label">Reply policy</span>
-        <p class="readonly-summary">
-          Always replies; reply may include the first ~50 chars of stdout/response.
-        </p>
-      </div>
+              <h4>Environment</h4>
+              <dl>
+                <dt><code>GW_ACTION_NAME</code></dt><dd>same as <code>$1</code></dd>
+                <dt><code>GW_SENDER_CALL</code></dt><dd>same as <code>$2</code></dd>
+                <dt><code>GW_OTP_VERIFIED</code></dt><dd>same as <code>$3</code></dd>
+                <dt><code>GW_OTP_CRED_NAME</code></dt><dd>name of the credential that validated the code (empty if OTP not required)</dd>
+                <dt><code>GW_SOURCE</code></dt><dd>where the trigger arrived from (e.g. <code>aprs</code>, <code>test</code>)</dd>
+                <dt><code>GW_INVOCATION_ID</code></dt><dd>numeric id of the audit row for this run</dd>
+                <dt><code>GW_ARG_&lt;KEY&gt;</code></dt><dd>one per arg, key uppercased, non-alphanumerics turned into <code>_</code></dd>
+                <dt><code>PATH</code></dt><dd>preset to <code>/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin</code>. The parent process environment is <strong>not</strong> inherited.</dd>
+              </dl>
+            {/if}
+
+            <h4>Runtime</h4>
+            <ul>
+              <li>Working directory: the value above, otherwise the directory containing the command.</li>
+              <li>Timeout: the value above. SIGTERM on expiry, SIGKILL 2 seconds later.</li>
+              <li>Output: stdout and stderr are merged; the first 4 KiB are captured and the leading characters are echoed back to the sender as the APRS reply.</li>
+            </ul>
+          </div>
+        </details>
+      {/if}
+        </div>
+      </section>
+
+      <section class="form-section">
+        <h4 class="form-section__title">Security</h4>
+        <div class="form-section__body">
+          <div class="field">
+            <span class="label">OTP</span>
+            <Toggle bind:checked={form.otp_required} label="Require valid one-time code" />
+            {#if form.otp_required}
+              <div class="otp-cred">
+                <Select
+                  bind:value={credSelectValue}
+                  options={credOptions}
+                  onValueChange={onCredChange}
+                  class={fieldErrors.otp_credential_id ? 'field-invalid' : ''}
+                />
+                <button
+                  type="button"
+                  class="link"
+                  onclick={() => onManageCredentials?.()}
+                >+ Manage credentials</button>
+              </div>
+              {#if fieldErrors.otp_credential_id}
+                <p class="field-error">{fieldErrors.otp_credential_id}</p>
+              {/if}
+            {/if}
+          </div>
+
+          <div class="field">
+            <label for="action-allowlist">Sender allowlist</label>
+            <SenderAllowlistEditor bind:value={form.sender_allowlist} />
+            <p class="hint">Comma-separated callsigns or <code>CALL-*</code> wildcards. Empty = anyone (OTP still applies).</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="form-section">
+        <h4 class="form-section__title">Throttling</h4>
+        <div class="form-section__body">
+          <div class="field narrow">
+            <label for="action-rate">Rate limit (s)</label>
+            <Input
+              id="action-rate"
+              type="number"
+              min="0"
+              bind:value={form.rate_limit_sec}
+            />
+            <p class="hint">Seconds between consecutive invocations.</p>
+          </div>
+
+          <div class="field narrow">
+            <label for="action-queue">Queue depth</label>
+            <Input
+              id="action-queue"
+              type="number"
+              min="0"
+              max="32"
+              bind:value={form.queue_depth}
+            />
+            <p class="hint">
+              When an Action is already running and another invocation arrives, this
+              many requests can wait in line. Beyond that the sender gets a
+              <code>busy</code> reply. Set to 0 to allow parallel runs (use only for
+              read-only commands).
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section class="form-section">
+        <h4 class="form-section__title">Status</h4>
+        <div class="form-section__body">
+          <div class="field">
+            <span class="label">Enabled</span>
+            <Toggle bind:checked={form.enabled} label="Action is enabled" />
+            <p class="hint">Disabled Actions still appear here but never fire; senders get a <code>disabled</code> reply.</p>
+          </div>
+
+          <div class="field">
+            <span class="label">Reply policy</span>
+            <p class="readonly-summary">
+              Always replies; reply may include the first ~50 chars of stdout/response.
+            </p>
+          </div>
+        </div>
+      </section>
     </div>
     <ScrollHint />
   </Modal.Body>
@@ -605,6 +628,32 @@
     font-weight: 600;
   }
   .form {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+  }
+  .form-section {
+    border: 1px solid var(--color-border, var(--border));
+    border-radius: 8px;
+    background: var(--color-surface, var(--bg-secondary, transparent));
+    padding: 14px 16px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    position: relative;
+  }
+  .form-section__title {
+    margin: 0;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+    color: var(--color-text, var(--text-primary));
+    padding: 0 8px 4px;
+    border-bottom: 2px solid var(--color-accent, var(--color-primary, #6366f1));
+    align-self: flex-start;
+  }
+  .form-section__body {
     display: flex;
     flex-direction: column;
     gap: 14px;
