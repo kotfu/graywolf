@@ -147,7 +147,9 @@
     appearance: none;
     background: transparent;
     border: 0;
-    padding: 4px;
+    padding: 0;
+    width: 32px;
+    height: 32px;
     margin: -4px -6px -4px 0;
     color: var(--text-secondary);
     cursor: pointer;

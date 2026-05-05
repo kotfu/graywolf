@@ -251,7 +251,18 @@
   .head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
   .head h2 { margin: 0; font-size: 0.9375rem; letter-spacing: 0.05em; text-transform: uppercase; }
   .head-actions { display: flex; gap: 6px; align-items: center; }
-  .gear, .close { background: transparent; border: none; cursor: pointer; color: var(--color-text-muted); padding: 4px; }
+  .gear, .close {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    color: var(--color-text-muted);
+    width: 32px;
+    height: 32px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+  }
   .tiles { list-style: none; padding: 0; margin: 0 0 12px; display: flex; flex-direction: column; gap: 6px; }
   .edit-list { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; }
   .draft { padding: 12px; border: 1px dashed var(--color-border); border-radius: var(--radius); margin-bottom: 12px; }
