@@ -7,8 +7,6 @@
   //   macro       -- RemoteActionMacro
   //   cooldownSec -- seconds remaining; 0 = enabled
   //   onFire      -- () => void
-  import { Icon } from '@chrissnell/chonky-ui';
-
   let { macro, cooldownSec = 0, onFire = () => {} } = $props();
 
   const disabled = $derived(cooldownSec > 0);
@@ -23,7 +21,7 @@
   aria-label={`Fire macro: ${macro.label}`}
   data-testid="macro-tile"
 >
-  <Icon name="zap" size="sm" />
+  <span class="bolt" aria-hidden="true">⚡</span>
   <span class="label">{macro.label}</span>
   <span class="cmd">{macro.action_name}{argsPreview}</span>
   {#if disabled}
@@ -58,4 +56,10 @@
     margin-top: 2px;
   }
   .disabled { opacity: 0.5; cursor: not-allowed; }
+  .bolt {
+    font-family: 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', system-ui, sans-serif;
+    font-size: 1rem;
+    line-height: 1;
+    color: #ffaa00;
+  }
 </style>

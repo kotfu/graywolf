@@ -10,7 +10,7 @@
   //   - Pre-flight wire-length check disables SEND with a tooltip
   //     when the assembled string exceeds the active APRS budget
   //     (67 / 200 chars).
-  import { Button, Icon, Input, Tooltip } from '@chrissnell/chonky-ui';
+  import { Button, Input, Tooltip } from '@chrissnell/chonky-ui';
   import CredentialPicker from './CredentialPicker.svelte';
   import { remoteActionsStore } from '../../../lib/remote_actions/store.svelte.js';
   import { remoteOtpApi } from '../../../lib/remote_actions/api.js';
@@ -127,13 +127,15 @@
     {#if overBudget}
       <Tooltip>
         <Tooltip.Trigger>
-          <Button variant="primary" disabled>SEND ACTION</Button>
+          <Button variant="primary" class="send-action-btn" disabled>
+            <span class="bolt" aria-hidden="true">⚡</span> SEND ACTION
+          </Button>
         </Tooltip.Trigger>
         <Tooltip.Content>Line exceeds APRS budget. Shorten args or shorten action name.</Tooltip.Content>
       </Tooltip>
     {:else}
-      <Button variant="primary" disabled={!canFire} onclick={fire}>
-        <Icon name="zap" size="sm" /> SEND ACTION
+      <Button variant="primary" class="send-action-btn" disabled={!canFire} onclick={fire}>
+        <span class="bolt" aria-hidden="true">⚡</span> SEND ACTION
       </Button>
     {/if}
   </div>
@@ -157,4 +159,23 @@
   .send-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
   .len { font-family: var(--font-mono); font-size: 0.75rem; color: var(--color-text-muted); }
   .len.over { color: var(--color-danger); }
+  .bolt {
+    font-family: 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', system-ui, sans-serif;
+    font-size: 1rem;
+    line-height: 1;
+    margin-right: 4px;
+  }
+  :global(.send-action-btn) {
+    background: #1a6e94 !important;
+    color: #ffaa00 !important;
+    border-color: #1a6e94 !important;
+    font-weight: 700;
+  }
+  :global(.send-action-btn:hover:not(:disabled)) {
+    background: #1f86b3 !important;
+    border-color: #1f86b3 !important;
+  }
+  :global(.send-action-btn:disabled) {
+    opacity: 0.55;
+  }
 </style>
