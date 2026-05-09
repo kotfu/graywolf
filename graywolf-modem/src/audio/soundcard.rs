@@ -424,10 +424,9 @@ pub fn resolve_output_device(pcm_id: &str) -> Result<Device, String> {
 /// On Linux/macOS the stable id is the cpal `name()` value (the ALSA
 /// hw identifier like `hw:CARD=AllInOneCable,DEV=0`). On Windows it is
 /// the IMMDevice endpoint id surfaced via cpal `Device::id()`; cpal's
-/// `name()` there returns only the device class label (`"Speakers"` /
-/// Hungarian `"Hangszórók"`) which is shared by every endpoint of that
-/// class, so matching by `name()` would resolve to the wrong card.
-/// Issue #100.
+/// `name()` there returns only the device class label (e.g.
+/// `"Speakers"`) which is shared by every endpoint of that class, so
+/// matching by `name()` would resolve to the wrong card. Issue #100.
 #[allow(deprecated)] // DeviceTrait::name() gives the raw pcm_id we need on non-Windows
 pub fn find_device_by_id(devices: impl Iterator<Item = Device>, id: &str) -> Option<Device> {
     for d in devices {
@@ -1075,8 +1074,8 @@ pub mod listing {
             // JSON field stays `name` for the schema contract.
             //
             // Windows exception: `description().name()` returns only the
-            // device class label (e.g. `"Speakers"` / Hungarian
-            // `"Hangszórók"`), shared by every soundcard of that class.
+            // device class label (e.g. `"Speakers"`), shared by every
+            // soundcard of that class.
             // Source the default-device match key from `Device::id()`
             // (the IMMDevice endpoint id, unique per endpoint) and have
             // `collect_devices` key its `is_default` comparison the
@@ -1174,11 +1173,11 @@ pub mod listing {
             // `"Speakers (Realtek(R) Audio)"`) or the interface friendly
             // name (`description().driver()`, e.g. `"USB PnP Sound
             // Device"`). cpal's `description().name()` returns only the
-            // class label (`"Speakers"` / `"Hangszórók"`), shared by
-            // every endpoint of that class — two cards of the same
-            // class would otherwise produce identical rows in the
-            // flare bundle. `is_default` is keyed on the IMMDevice
-            // endpoint id surfaced by `Device::id()`, matching the
+            // class label (e.g. `"Speakers"`), shared by every endpoint
+            // of that class — two cards of the same class would
+            // otherwise produce identical rows in the flare bundle.
+            // `is_default` is keyed on the IMMDevice endpoint id
+            // surfaced by `Device::id()`, matching the
             // `default_input`/`default_output` source above. Issue #100.
             #[cfg(target_os = "windows")]
             let (name, is_default) = {
