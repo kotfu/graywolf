@@ -62,6 +62,13 @@ android {
             isMinifyEnabled = false
         }
     }
+
+    testOptions {
+        // android.util.Log etc. are not mocked under the host JVM. Default
+        // values keeps the unit-test surface workable without dragging in
+        // Robolectric for what are effectively pure-Kotlin protocol tests.
+        unitTests.isReturnDefaultValues = true
+    }
 }
 
 protobuf {
