@@ -1255,10 +1255,21 @@ func (a *App) wireHTTP(ctx context.Context) error {
 
 	a.httpSrv = &http.Server{
 		Addr:              a.cfg.HTTPAddr,
-		Handler:           mux,
+		Handler:           wrapWithBearerIfSet(a.cfg, mux),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 	return nil
+}
+
+// wrapWithBearerIfSet wraps next with BearerAuthMiddleware iff
+// cfg.BearerToken is non-empty. Extracted from the httpSrv
+// construction to keep the wiring decision testable. Android sets the
+// token via env var; desktop leaves it empty and the wrap is a no-op.
+func wrapWithBearerIfSet(cfg Config, next http.Handler) http.Handler {
+	if cfg.BearerToken == "" {
+		return next
+	}
+	return webauth.BearerAuthMiddleware(cfg.BearerToken)(next)
 }
 
 // --- Component factories -------------------------------------------------
