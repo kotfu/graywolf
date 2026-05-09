@@ -2577,10 +2577,18 @@ func (a *App) httpComponent() namedComponent {
 		name: "http",
 		start: func(ctx context.Context) error {
 			a.logBanner()
+			ln, lerr := net.Listen("tcp", a.httpSrv.Addr)
+			if lerr != nil {
+				a.logger.Error("http: listen failed", "addr", a.httpSrv.Addr, "err", lerr)
+				return lerr
+			}
+			if a.cfg.OnHTTPListenerReady != nil {
+				a.cfg.OnHTTPListenerReady()
+			}
 			a.httpWG.Add(1)
 			go func() {
 				defer a.httpWG.Done()
-				if err := a.httpSrv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+				if err := a.httpSrv.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) {
 					a.logger.Error("http server", "err", err)
 				}
 			}()
