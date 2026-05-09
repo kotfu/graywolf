@@ -330,8 +330,19 @@ func (m *Metrics) SetAgwClients(n int) {
 }
 
 // Handler returns an http.Handler serving /metrics from this registry.
+//
+// DisableCompression skips the per-scrape gzip writer (compress/flate
+// allocates ~1 MiB of state per writer construction). graywolf is
+// expected to be scraped from the local network or loopback where
+// compression saves nothing on the wire but produces measurable GC
+// pressure under frequent scrape intervals — a long-run heap profile
+// showed ~20% of total allocation churn coming from this single
+// codepath.
 func (m *Metrics) Handler() http.Handler {
-	return promhttp.HandlerFor(m.Registry, promhttp.HandlerOpts{Registry: m.Registry})
+	return promhttp.HandlerFor(m.Registry, promhttp.HandlerOpts{
+		Registry:           m.Registry,
+		DisableCompression: true,
+	})
 }
 
 // UpdateFromStatus folds a Rust-side StatusUpdate into the metric vectors.
