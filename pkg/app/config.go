@@ -80,6 +80,14 @@ type Config struct {
 	Version   string
 	GitCommit string
 
+	// ModemSocketPath, when non-empty, switches the modembridge into
+	// connect-only mode: it dials this UDS path instead of forking
+	// the graywolf-modem child. Used on Android where the Service
+	// loads the modem cdylib in-process and exposes it at a Service-
+	// allocated socket path. Empty on desktop (modembridge owns the
+	// child process).
+	ModemSocketPath string
+
 	// Platform is "android" on Android builds, "" elsewhere. Wiring
 	// uses it to gate components that don't make sense on Android
 	// (updatescheck, native serial PTT). Set by main_android.go from
