@@ -1296,10 +1296,9 @@ fn alsa_card_description(_cpal_name: &str) -> String {
 
 /// On Windows, pull a device-specific friendly string out of cpal's
 /// `DeviceDescription`. `description().name()` itself prefers
-/// `DEVPKEY_Device_DeviceDesc` (the device class label `"Speakers"` /
-/// Hungarian `"Hangszórók"`), which is shared by every endpoint of
-/// that class — so it can't disambiguate two soundcards. We try, in
-/// order:
+/// `DEVPKEY_Device_DeviceDesc` (the device class label, e.g.
+/// `"Speakers"`), which is shared by every endpoint of that class —
+/// so it can't disambiguate two soundcards. We try, in order:
 ///
 /// 1. `extended()[0]` — cpal stores `DEVPKEY_Device_FriendlyName`
 ///    there when it differs from the class name (see
