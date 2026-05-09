@@ -7,6 +7,38 @@
 # route the body references via [text](link) markdown; renderer only
 # accepts internal #/... routes.
 
+- version: "0.13.3"
+  date: "2026-05-09"
+  style: info
+  schema_version: 1
+  title: "Bug fixes: Windows audio devices, beacon errors, tooltips, and more"
+  body: |
+    A round of bug fixes:
+
+    On Windows, picking an audio device sometimes selected the wrong
+    one when several devices shared the same name. Each device is now
+    uniquely identified, so the device you pick is the device that
+    gets used.
+
+    The Send Now button on a beacon was silently swallowing errors.
+    If the send fails, the UI now tells you why.
+
+    Tooltips on the light themes had unreadable white text on a light
+    background. They now use the correct color.
+
+    The Live Map's RF count now shows both the direct-heard count and
+    the total when the Direct RX filter is on, so the number matches
+    the dots on the map.
+
+    The I-Gate enable/disable toggle now takes effect immediately
+    without restarting Graywolf.
+
+    Outbound message status is now logged to the console so you can
+    see why a message stalled, including whether the rate governor or
+    RF availability blocked it.
+
+    Nothing to reconfigure.
+
 - version: "0.13.2"
   date: "2026-05-06"
   style: info
