@@ -139,6 +139,7 @@ func New(cfg Config) *Bridge {
 	b.sup = newSupervisor(supervisorConfig{
 		BinaryPath:       cfg.BinaryPath,
 		SocketDir:        cfg.SocketDir,
+		ExistingSocket:   cfg.ExistingSocket,
 		ReadinessTimeout: cfg.ReadinessTimeout,
 		Metrics:          cfg.Metrics,
 		RunSession: func(ctx context.Context, conn net.Conn) error {

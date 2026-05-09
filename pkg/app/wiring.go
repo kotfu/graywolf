@@ -203,10 +203,11 @@ func (a *App) wireServicesInner(ctx context.Context) error {
 
 	// --- Modem bridge (construction; Start happens later) --------------
 	a.bridge = modembridge.New(modembridge.Config{
-		BinaryPath: resolvedModem,
-		Store:      a.store,
-		Metrics:    a.metrics,
-		Logger:     a.logger,
+		BinaryPath:     resolvedModem,
+		ExistingSocket: a.cfg.ModemSocketPath,
+		Store:          a.store,
+		Metrics:        a.metrics,
+		Logger:         a.logger,
 	})
 
 	// --- TX backend dispatcher (Phase 3) -------------------------------
