@@ -3,9 +3,14 @@ package com.nw5w.graywolf
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.app.Service
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.ServiceInfo
+import android.graphics.drawable.Icon
 import android.os.Build
 import android.os.IBinder
 import android.util.Log
@@ -22,6 +27,15 @@ class GraywolfService : Service() {
     private var goLauncher: GoLauncher? = null
     private var platformServer: PlatformServer? = null
     private val supervisor = Supervisor(onRestart = ::supervisorRestart)
+
+    private val stopReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            if (intent.action == ACTION_STOP) {
+                Log.i(TAG, "stop action received; shutting down")
+                stopSelf()
+            }
+        }
+    }
 
     private fun socketPath(): String =
         File(cacheDir, "graywolf-modem.sock").absolutePath
@@ -89,10 +103,32 @@ class GraywolfService : Service() {
                 NotificationManager.IMPORTANCE_LOW,
             )
         )
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(
+                stopReceiver,
+                IntentFilter(ACTION_STOP),
+                Context.RECEIVER_NOT_EXPORTED,
+            )
+        } else {
+            @Suppress("UnspecifiedRegisterReceiverFlag")
+            registerReceiver(stopReceiver, IntentFilter(ACTION_STOP))
+        }
+        val stopIntent = Intent(ACTION_STOP).setPackage(packageName)
+        val stopPending = PendingIntent.getBroadcast(
+            this, 0, stopIntent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
         val notif: Notification = Notification.Builder(this, getString(R.string.notification_channel_id))
             .setContentTitle(getString(R.string.notification_title))
             .setContentText(getString(R.string.notification_text))
             .setSmallIcon(android.R.drawable.ic_media_play)
+            .addAction(
+                Notification.Action.Builder(
+                    Icon.createWithResource(this, android.R.drawable.ic_menu_close_clear_cancel),
+                    getString(R.string.notification_stop_label),
+                    stopPending,
+                ).build()
+            )
             .build()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             startForeground(
@@ -145,12 +181,16 @@ class GraywolfService : Service() {
         audioPump.stop()
         platformServer?.stop()
         ModemBridge.modemStop()
+        try {
+            unregisterReceiver(stopReceiver)
+        } catch (_: IllegalArgumentException) { /* idempotent */ }
         super.onDestroy()
     }
 
     companion object {
         private const val TAG = "GraywolfService"
         private const val NOTIF_ID = 0x6757
+        const val ACTION_STOP = "com.nw5w.graywolf.STOP"
 
         @Volatile
         var goListenerReady: Boolean = false
