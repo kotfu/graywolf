@@ -202,6 +202,24 @@ func (a *App) wireServicesInner(ctx context.Context) error {
 	// --- Station cache (map's last-known-state store) ------------------
 	a.stationCache = stationcache.NewPersistentCache(a.logger)
 	plCfg, _ := a.store.GetPositionLogConfig(ctx)
+	// On Android, default the position log to enabled on first boot.
+	// The desktop default (off) protects SD-card-based Pi installs from
+	// write amplification; Android internal storage doesn't share that
+	// constraint and a disabled history db wipes the live map on every
+	// process restart -- a confusing failure mode for the operator.
+	if plCfg == nil && a.cfg.Platform == "android" && a.cfg.HistoryDBPath != "" {
+		seeded := &configstore.PositionLogConfig{
+			Enabled: true,
+			DBPath:  a.cfg.HistoryDBPath,
+		}
+		if err := a.store.UpsertPositionLogConfig(ctx, seeded); err != nil {
+			a.logger.Warn("seed position log config failed", "err", err)
+		} else {
+			a.logger.Info("seeded position log config (android first-boot default)",
+				"path", a.cfg.HistoryDBPath)
+			plCfg = seeded
+		}
+	}
 	if plCfg != nil && plCfg.Enabled && a.cfg.HistoryDBPath != "" {
 		hdb, err := historydb.Open(a.cfg.HistoryDBPath)
 		if err != nil {
