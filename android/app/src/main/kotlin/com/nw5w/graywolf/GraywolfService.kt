@@ -11,9 +11,11 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.ServiceInfo
 import android.graphics.drawable.Icon
+import android.net.ConnectivityManager
 import android.os.Build
 import android.os.IBinder
 import android.util.Log
+import java.net.Inet6Address
 import com.nw5w.graywolf.BuildConfig
 import com.nw5w.graywolf.audio.AudioPump
 import com.nw5w.graywolf.binaries.GoLauncher
@@ -43,6 +45,23 @@ class GraywolfService : Service() {
     private fun platformSocketPath(): String =
         File(cacheDir, "platform.sock").absolutePath
 
+    /**
+     * Read the active network's DNS server list from ConnectivityManager
+     * and return as a comma-separated string of IP literals. Empty when
+     * no active network or no DNS servers (Wi-Fi off / airplane mode).
+     *
+     * IPv6 addresses are wrapped in brackets so the consumer (Go side)
+     * can parse them as `host:port` directly.
+     */
+    private fun currentDnsServers(): String {
+        val cm = getSystemService(ConnectivityManager::class.java) ?: return ""
+        val net = cm.activeNetwork ?: return ""
+        val lp = cm.getLinkProperties(net) ?: return ""
+        return lp.dnsServers.joinToString(",") { addr ->
+            if (addr is Inet6Address) "[${addr.hostAddress}]" else addr.hostAddress ?: ""
+        }
+    }
+
     private fun bootModem(): Boolean {
         val rc = ModemBridge.modemStart(socketPath(), /* gainDb = */ -6.0f)
         if (rc != 0) {
@@ -58,6 +77,8 @@ class GraywolfService : Service() {
         val bearerToken = (application as GraywolfApp).bearerToken
         val goPath = File(applicationInfo.nativeLibraryDir, "libgraywolf.so").absolutePath
         val tileCacheDir = File(filesDir, "tiles").also { it.mkdirs() }
+        val dnsServers = currentDnsServers()
+        Log.i(TAG, "GRAYWOLF_DNS_SERVERS=$dnsServers")
         val launcher = GoLauncher(
             executablePath = goPath,
             env = mapOf(
@@ -74,6 +95,12 @@ class GraywolfService : Service() {
                 "GRAYWOLF_HISTORY_DB" to File(filesDir, "graywolf-history.db").absolutePath,
                 "GRAYWOLF_TILE_CACHE" to tileCacheDir.absolutePath,
                 "GRAYWOLF_PLATFORM" to "android",
+                // Android has no /etc/resolv.conf; without this Go's net
+                // resolver falls through to dialing [::1]:53 and every
+                // outbound DNS lookup fails with "connection refused".
+                // Pull DNS server list from the active network's
+                // LinkProperties and let Go override its DefaultResolver.
+                "GRAYWOLF_DNS_SERVERS" to dnsServers,
             ),
         )
         val ok = launcher.startAndAwaitReady(10_000)
