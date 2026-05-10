@@ -30,8 +30,11 @@ class GpsAdapter(
     private val ctx: Context,
     private val server: PlatformServer,
 ) {
-    private val locationManager =
+    // lazy so unit tests can construct GpsAdapter with a mocked Context
+    // without resolving the system service (toGpsFix doesn't touch it).
+    private val locationManager: LocationManager by lazy {
         ctx.getSystemService(Context.LOCATION_SERVICE) as LocationManager
+    }
 
     @Volatile private var lastSatCount: Int = 0
     @Volatile private var started: Boolean = false
