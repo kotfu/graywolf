@@ -239,7 +239,7 @@ func (a *App) wireServicesInner(ctx context.Context) error {
 			// show + something to bind a channel to.
 			for _, seed := range []configstore.AudioDevice{
 				{
-					Name:       "Android Default Mic",
+					Name:       "Default Input",
 					Direction:  "input",
 					SourceType: "soundcard",
 					SourcePath: "android-default",
@@ -248,7 +248,7 @@ func (a *App) wireServicesInner(ctx context.Context) error {
 					Format:     "s16le",
 				},
 				{
-					Name:       "Android Default Speaker",
+					Name:       "Default Output",
 					Direction:  "output",
 					SourceType: "soundcard",
 					SourcePath: "android-default",
