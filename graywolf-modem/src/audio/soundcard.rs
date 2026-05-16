@@ -173,14 +173,35 @@ pub fn spawn(
         .default_input_config()
         .map_err(|e| format!("device default config: {}", e))?;
 
+    // Safety net for corrupt persisted config: clamp the requested rate
+    // to one the device actually supports and the modem can decode (never
+    // above MODEM_MAX_SAMPLE_RATE). A stale `sample_rate=96000` from a
+    // plughw device that really runs 48 kHz is rejected here instead of
+    // silently desyncing the demod's bit timing.
+    let supported_ranges: Vec<(u32, u32)> = device
+        .supported_input_configs()
+        .map(|it| it.map(|c| (c.min_sample_rate(), c.max_sample_rate())).collect())
+        .unwrap_or_default();
+    let stream_rate = choose_stream_rate(
+        cfg.sample_rate,
+        supported.sample_rate(),
+        &supported_ranges,
+    );
+    if stream_rate != cfg.sample_rate {
+        eprintln!(
+            "graywolf-modem: input rate {} Hz unsupported/corrupt; opening at {} Hz instead",
+            cfg.sample_rate, stream_rate
+        );
+    }
+
     let channels = negotiate_channels(
-        &device, cfg.sample_rate, cfg.channels.max(1) as u16, "input",
+        &device, stream_rate, cfg.channels.max(1) as u16, "input",
         |d| d.supported_input_configs(),
     )?;
 
     let stream_config = StreamConfig {
         channels,
-        sample_rate: cfg.sample_rate,
+        sample_rate: stream_rate,
         buffer_size: cpal::BufferSize::Default,
     };
 
@@ -326,7 +347,9 @@ pub fn spawn(
         .map_err(|e| format!("cpal {}", e))?;
 
     Ok(AudioSource {
-        sample_rate: cfg.sample_rate,
+        // Report the rate actually opened, not the requested one, so the
+        // demodulator clocks bit timing against real audio.
+        sample_rate: stream_rate,
         thread: Some(join),
         stop,
     })
@@ -617,6 +640,32 @@ pub fn pick_input_probe_config(dev: &Device) -> Result<(SampleFormat, StreamConf
             buffer_size: cpal::BufferSize::Default,
         },
     ))
+}
+
+/// Decide the sample rate to actually open a stream at, given the
+/// operator-configured `requested` rate, the device's `native` rate
+/// (cpal `default_*_config().sample_rate()`), and the device's advertised
+/// `supported` (min,max) ranges.
+///
+/// This is the safety net for corrupt persisted config: an ALSA
+/// `plughw:`/`default` PCM advertises a synthetic resample range up to
+/// 192 kHz even though the codec runs at 48 kHz, so a stale
+/// `sample_rate=96000` in the DB would otherwise open a stream the demod
+/// then clocks at the wrong rate (every frame fails FCS, RX dies). We
+/// never open above [`super::MODEM_MAX_SAMPLE_RATE`], honor `requested`
+/// only when it is sane and actually covered by a supported range, and
+/// otherwise fall back to the device's native rate clamped to the ceiling.
+pub fn choose_stream_rate(requested: u32, native: u32, supported: &[(u32, u32)]) -> u32 {
+    let ceiling = super::MODEM_MAX_SAMPLE_RATE;
+    let in_range = |r: u32| supported.iter().any(|&(lo, hi)| r >= lo && r <= hi);
+
+    if requested != 0 && requested <= ceiling && in_range(requested) {
+        return requested;
+    }
+    if native != 0 && native <= ceiling {
+        return native;
+    }
+    ceiling
 }
 
 /// Briefly open `dev` for capture and report whether it actually streams.
@@ -1143,6 +1192,32 @@ fn fill_output_u16(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn choose_stream_rate_honors_sane_supported_request() {
+        // 48 kHz, in range, at/under ceiling → use it as-is.
+        assert_eq!(choose_stream_rate(48_000, 48_000, &[(8_000, 48_000)]), 48_000);
+        assert_eq!(choose_stream_rate(44_100, 48_000, &[(8_000, 48_000)]), 44_100);
+    }
+
+    #[test]
+    fn choose_stream_rate_rejects_request_above_ceiling() {
+        // Corrupt 96 kHz from a plughw device whose synthetic range
+        // covers it — must NOT be honored; fall back to native 48 kHz.
+        assert_eq!(choose_stream_rate(96_000, 48_000, &[(8_000, 192_000)]), 48_000);
+        // 88.2 kHz "supported" by the plug plugin — still rejected.
+        assert_eq!(choose_stream_rate(88_200, 44_100, &[(8_000, 192_000)]), 44_100);
+    }
+
+    #[test]
+    fn choose_stream_rate_clamps_bad_native_and_unset_request() {
+        // plughw default itself lies (native=96k) → clamp to ceiling.
+        assert_eq!(choose_stream_rate(96_000, 96_000, &[(8_000, 192_000)]), 48_000);
+        // requested unset (0) → device native.
+        assert_eq!(choose_stream_rate(0, 48_000, &[(8_000, 48_000)]), 48_000);
+        // requested not covered by any supported range → native.
+        assert_eq!(choose_stream_rate(44_100, 48_000, &[(48_000, 48_000)]), 48_000);
+    }
 
     /// Helper: turn a slice of mono samples into the `next()` closure the
     /// `fill_output_*` functions expect.
