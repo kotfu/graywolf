@@ -200,6 +200,10 @@ func (b *Bridge) supervise(ctx context.Context) {
 	b.toneDispatcher.Reset()
 	b.scanDispatcher.Reset()
 	b.status.Reset()
+	// Cancel any watchdog timers left over from a prior session so a
+	// stale timer can't fire an auto-unkey into a freshly-spawned modem
+	// that has no keyed-PTT state.
+	b.pttWatchdog.cancelAll()
 	// Reset liveness: IsRunning must be false until a fresh session
 	// starts exchanging IPC messages.
 	b.lastActivityUnix.Store(0)

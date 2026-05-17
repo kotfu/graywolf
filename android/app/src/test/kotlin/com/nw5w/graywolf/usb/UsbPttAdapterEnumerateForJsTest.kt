@@ -99,18 +99,23 @@ class UsbPttAdapterEnumerateForJsTest {
         val result = JSONArray(UsbPttAdapter.enumerateForJs().toString())
 
         assertEquals(2, result.length())
-        // Find entries by vid string (order not guaranteed by HashMap).
+        // Find entries by decimal vid int (order not guaranteed by HashMap).
         val entries = (0 until result.length()).map { result.getJSONObject(it) }
-        val cp = entries.first { it.getString("vid") == "0x10C4" }
-        val ai = entries.first { it.getString("vid") == "0x1209" }
+        val cp = entries.first { it.getInt("vid") == 0x10C4 }
+        val ai = entries.first { it.getInt("vid") == 0x1209 }
 
-        // Required keys present and correct types.
-        assertEquals("0xEA60", cp.getString("pid"))
+        // vid/pid are decimal Ints for the JS bridge call.
+        assertEquals(0xEA60, cp.getInt("pid"))
+        // vid_hex/pid_hex are hex strings for display.
+        assertEquals("0x10C4", cp.getString("vid_hex"))
+        assertEquals("0xEA60", cp.getString("pid_hex"))
         assertEquals("Digirig Mobile", cp.getString("name"))
         assertEquals("CP2102N", cp.getString("role"))
         assertTrue(cp.getBoolean("permission_granted"))
 
-        assertEquals("0x7388", ai.getString("pid"))
+        assertEquals(0x7388, ai.getInt("pid"))
+        assertEquals("0x1209", ai.getString("vid_hex"))
+        assertEquals("0x7388", ai.getString("pid_hex"))
         assertEquals("AIOC", ai.getString("role"))
         assertFalse(ai.getBoolean("permission_granted"))
     }

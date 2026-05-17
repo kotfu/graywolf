@@ -172,8 +172,8 @@ function pickUsbDevice(devices, pttMethod) {
 }
 
 const fakeDevices = [
-  { name: 'Digirig', role: 'CP2102N', vendor_id: 0x10C4, product_id: 0xEA60, permission_granted: true },
-  { name: 'AIOC',    role: 'AIOC',    vendor_id: 0x1209, product_id: 0x7388, permission_granted: false },
+  { name: 'Digirig', role: 'CP2102N', vid: 0x10C4, pid: 0xEA60, vid_hex: '0x10C4', pid_hex: '0xEA60', permission_granted: true },
+  { name: 'AIOC',    role: 'AIOC',    vid: 0x1209, pid: 0x7388, vid_hex: '0x1209', pid_hex: '0x7388', permission_granted: false },
 ];
 
 test('USB device match: CP2102N_RTS picks Digirig not AIOC', () => {
@@ -201,7 +201,7 @@ test('USB device match: VOX returns null (no USB role for VOX)', () => {
 test('USB device match: CM108_HID picks the right device when present', () => {
   const devicesWithCm108 = [
     ...fakeDevices,
-    { name: 'CM108B dongle', role: 'CM108', vendor_id: 0x0D8C, product_id: 0x0012, permission_granted: true },
+    { name: 'CM108B dongle', role: 'CM108', vid: 0x0D8C, pid: 0x0012, vid_hex: '0x0D8C', pid_hex: '0x0012', permission_granted: true },
   ];
   const device = pickUsbDevice(devicesWithCm108, PTT_METHOD_CM108_HID);
   assert.equal(device?.name, 'CM108B dongle');

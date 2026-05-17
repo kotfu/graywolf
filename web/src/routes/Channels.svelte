@@ -252,8 +252,8 @@
     };
     try {
       globalThis.GraywolfWebInterface?.requestUsbPermission?.(
-        usbDevice.vendor_id,
-        usbDevice.product_id,
+        usbDevice.vid,
+        usbDevice.pid,
         callbackId,
       );
     } catch (err) {
