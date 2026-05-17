@@ -115,14 +115,21 @@ mod android_impl {
     /// - Kotlin returned `false` (actuator reported failure)
     pub(crate) fn jni_ptt_set(method: i32, keyed: bool) -> Result<(), String> {
         let vm = get_vm()?;
+
+        // Clone the GlobalRef (Clone impl on jni::objects::GlobalRef) and copy
+        // the JMethodID (Copy) while holding the lock, then drop the lock before
+        // the JNI call so a future re-entrant upcall path can't deadlock.
+        let (callback, method_id) = {
+            let slot = ptt_slot().lock().unwrap();
+            let cb = slot
+                .as_ref()
+                .ok_or_else(|| "no PTT callback installed".to_string())?;
+            (cb.obj.clone(), cb.method)
+        };
+
         let mut env = vm
             .attach_current_thread()
             .map_err(|e| format!("pttSet: attach_current_thread: {e}"))?;
-
-        let slot = ptt_slot().lock().unwrap();
-        let cb = slot
-            .as_ref()
-            .ok_or_else(|| "no PTT callback installed".to_string())?;
 
         let keyed_jni: jni::sys::jboolean = keyed as u8;
 
@@ -130,8 +137,8 @@ mod android_impl {
         // install time; GlobalRef keeps the object alive.
         let result = unsafe {
             env.call_method_unchecked(
-                cb.obj.as_obj(),
-                cb.method,
+                callback.as_obj(),
+                method_id,
                 jni::signature::ReturnType::Primitive(jni::signature::Primitive::Boolean),
                 &[
                     jni::sys::jvalue { i: method },
@@ -162,14 +169,21 @@ mod android_impl {
     /// - JVM attach, array allocation, or call fails
     pub(crate) fn jni_tx_push_samples(buf: &[i16]) -> Result<i32, String> {
         let vm = get_vm()?;
+
+        // Clone the GlobalRef and copy the JMethodID under the lock, then drop
+        // the lock before attaching the JVM thread so a re-entrant upcall path
+        // can't deadlock.
+        let (callback, method_id) = {
+            let slot = audio_tx_slot().lock().unwrap();
+            let cb = slot
+                .as_ref()
+                .ok_or_else(|| "no AudioTx callback installed".to_string())?;
+            (cb.obj.clone(), cb.method)
+        };
+
         let mut env = vm
             .attach_current_thread()
             .map_err(|e| format!("tx_push_samples: attach_current_thread: {e}"))?;
-
-        let slot = audio_tx_slot().lock().unwrap();
-        let cb = slot
-            .as_ref()
-            .ok_or_else(|| "no AudioTx callback installed".to_string())?;
 
         // Allocate a JVM short[] and fill it.
         let arr: JShortArray = env
@@ -183,8 +197,8 @@ mod android_impl {
         // SAFETY: method ID and GlobalRef are valid for this callback object.
         let result = unsafe {
             env.call_method_unchecked(
-                cb.obj.as_obj(),
-                cb.method,
+                callback.as_obj(),
+                method_id,
                 jni::signature::ReturnType::Primitive(jni::signature::Primitive::Int),
                 &[
                     jni::sys::jvalue {

@@ -76,6 +76,25 @@ func TestPttWatchdog_CancelsOnUnkey(t *testing.T) {
 	}
 }
 
+// TestPttWatchdog_CancelAll: key two channels, call cancelAll, wait past the
+// timeout — the unkey closure must NOT be invoked for either channel.
+func TestPttWatchdog_CancelAll(t *testing.T) {
+	var calls atomic.Int32
+	w := newPttWatchdog(50*time.Millisecond, func(ch uint32) error {
+		calls.Add(1)
+		return nil
+	}, discardLogger())
+
+	w.onKey(1)
+	w.onKey(2)
+	w.cancelAll()
+	time.Sleep(120 * time.Millisecond) // well past timeout
+
+	if got := calls.Load(); got != 0 {
+		t.Errorf("expected 0 auto-unkey calls after cancelAll, got %d", got)
+	}
+}
+
 // TestPttWatchdog_PerChannelIsolation: two channels each get their own timer;
 // both must fire independently.
 func TestPttWatchdog_PerChannelIsolation(t *testing.T) {

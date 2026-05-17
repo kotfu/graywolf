@@ -54,6 +54,18 @@ func (w *pttWatchdog) onUnkey(channel uint32) {
 	}
 }
 
+// cancelAll stops and discards every active timer. Called on supervisor
+// restart so stale timers from the previous modem session can't fire into
+// a freshly-spawned child that has no keyed-PTT state.
+func (w *pttWatchdog) cancelAll() {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	for ch, t := range w.timers {
+		t.Stop()
+		delete(w.timers, ch)
+	}
+}
+
 // timerFire is the AfterFunc callback. It sends an unkey and removes the
 // timer entry. Errors from unkey are logged; the callback is fire-and-forget.
 func (w *pttWatchdog) timerFire(channel uint32) {

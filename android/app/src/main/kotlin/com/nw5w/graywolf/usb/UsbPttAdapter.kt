@@ -604,8 +604,10 @@ object UsbPttAdapter : UsbPttCallback {
         for ((_, dev) in usbManager.deviceList) {
             val role = classify(dev)
             out.put(JSONObject().apply {
-                put("vid", "0x%04X".format(dev.vendorId))
-                put("pid", "0x%04X".format(dev.productId))
+                put("vid", dev.vendorId)                            // decimal Int — for requestUsbPermission()
+                put("pid", dev.productId)                           // decimal Int — for requestUsbPermission()
+                put("vid_hex", "0x%04X".format(dev.vendorId))      // hex string — for display
+                put("pid_hex", "0x%04X".format(dev.productId))
                 put("name", dev.productName ?: dev.deviceName)
                 put("role", role.name)
                 put("permission_granted", usbManager.hasPermission(dev))
