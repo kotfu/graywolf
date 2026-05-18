@@ -9,6 +9,7 @@
   import { groupReferrers, totalReferrers } from '../lib/channelReferrers.js';
   import ChannelRow from './channels/ChannelRow.svelte';
   import ChannelEditModal from './channels/ChannelEditModal.svelte';
+  import ChannelDeleteFlow from './channels/ChannelDeleteFlow.svelte';
 
   // The Channels page itself hydrates the shared store: this page is
   // the cheapest place for a first-visit operator to land, so it
@@ -20,23 +21,8 @@
   let modalOpen = $state(false);
   let editing = $state(null);
 
-  // Phase 5 two-step delete flow (D12).
-  // Stage 1 ("impact") lists referrers grouped by type; the operator
-  // chooses to cancel or proceed to stage 2. Stage 2 ("confirm")
-  // requires typing the channel's exact name before the red button
-  // enables. An unreferenced channel skips stage 1 and goes straight
-  // to stage 2 with the same typed-name gate for consistency.
+  // delete flow state — owned by ChannelDeleteFlow; parent only tracks the target.
   let deleteTarget = $state(null);
-  let deleteImpactOpen = $state(false);
-  let deleteConfirmOpen = $state(false);
-  let deleteReferrers = $state([]);
-  let deleteNameInput = $state('');
-  let deleteInFlight = $state(false);
-  let deleteGroups = $derived(groupReferrers(deleteReferrers));
-  let deleteTotal = $derived(totalReferrers(deleteReferrers));
-  let deleteNameMatches = $derived(
-    deleteTarget != null && deleteNameInput.trim() === deleteTarget.name
-  );
 
   // Phase 3 -- channel PUT 409 confirm-and-force flow. Mirrors the
   // stage-1 impact dialog above: show the list of referrers that
@@ -216,87 +202,10 @@
     putServerError = '';
   }
 
-  // Phase 5 two-step delete flow (D12).
-  //
-  // Click "Delete" → requestDelete(row):
-  //   1. Fetch /api/channels/{id}/referrers.
-  //   2. Empty list: skip the impact dialog; open the typed-name
-  //      confirm dialog with cascade=false path.
-  //   3. Non-empty list: open the impact dialog first. From there the
-  //      operator clicks "Remove references…" to advance to the
-  //      typed-name confirm dialog with cascade=true.
-  //
-  // Either way, the final Delete button is enabled only when the
-  // operator types the channel's exact name. On confirm we call
-  // DELETE with or without ?cascade=true depending on the path.
-  async function requestDelete(row) {
+  // Opener: ChannelRow's onDelete sets deleteTarget to kick off the
+  // delete flow owned entirely by ChannelDeleteFlow.
+  function requestDelete(row) {
     deleteTarget = row;
-    deleteNameInput = '';
-    deleteReferrers = [];
-    try {
-      const resp = await api.get(`/channels/${row.id}/referrers`);
-      const refs = Array.isArray(resp?.referrers) ? resp.referrers : [];
-      deleteReferrers = refs;
-      if (refs.length === 0) {
-        // Unreferenced — go straight to the typed-name confirm.
-        deleteImpactOpen = false;
-        deleteConfirmOpen = true;
-      } else {
-        deleteImpactOpen = true;
-        deleteConfirmOpen = false;
-      }
-    } catch (err) {
-      toasts.error(err.message);
-      deleteTarget = null;
-    }
-  }
-
-  function proceedToConfirm() {
-    deleteImpactOpen = false;
-    deleteConfirmOpen = true;
-    deleteNameInput = '';
-  }
-
-  function cancelDelete() {
-    deleteImpactOpen = false;
-    deleteConfirmOpen = false;
-    deleteTarget = null;
-    deleteReferrers = [];
-    deleteNameInput = '';
-  }
-
-  async function executeDelete() {
-    if (!deleteTarget || !deleteNameMatches) return;
-    const cascade = deleteReferrers.length > 0;
-    const id = deleteTarget.id;
-    deleteInFlight = true;
-    try {
-      const path = cascade ? `/channels/${id}?cascade=true` : `/channels/${id}`;
-      await api.delete(path);
-      toasts.success(cascade
-        ? `Channel deleted along with ${deleteTotal} reference${deleteTotal === 1 ? '' : 's'}`
-        : 'Channel deleted');
-      await Promise.all([loadChannels(), loadTxTimings()]);
-      deleteImpactOpen = false;
-      deleteConfirmOpen = false;
-      deleteTarget = null;
-      deleteReferrers = [];
-      deleteNameInput = '';
-    } catch (err) {
-      // A 409 here would mean a race (referrers appeared between our
-      // GET and DELETE). Surface the same error channel; the impact
-      // dialog route will naturally pick them up on the next click.
-      if (err instanceof ApiError && err.status === 409 && Array.isArray(err.body?.referrers)) {
-        deleteReferrers = err.body.referrers;
-        deleteConfirmOpen = false;
-        deleteImpactOpen = true;
-        toasts.error('New references appeared — review and try again');
-      } else {
-        toasts.error(err.message);
-      }
-    } finally {
-      deleteInFlight = false;
-    }
   }
 </script>
 
@@ -338,79 +247,11 @@
   onCancel={closeModal}
 />
 
-<!-- Phase 5 two-step delete: stage 1 = impact dialog (only when the
-     channel has referrers). Lists what the cascade will do to each
-     dependent row, grouped by type, so the operator has an informed
-     sense of scope before hitting the typed-name gate. -->
-<AlertDialog bind:open={deleteImpactOpen}>
-  <AlertDialog.Content>
-    <AlertDialog.Title>Delete channel {deleteTarget?.name ?? ''}?</AlertDialog.Title>
-    <AlertDialog.Description>
-      This channel has {deleteTotal} reference{deleteTotal === 1 ? '' : 's'}. Deleting it will affect:
-    </AlertDialog.Description>
-    <ul class="referrer-groups">
-      {#each deleteGroups as g (g.type)}
-        <li>
-          <strong>{g.items.length} {g.label}</strong>{#if g.action}<span class="referrer-action"> — {g.action}</span>{/if}{#if g.items.some((i) => i.name)}:
-            <span class="referrer-items">
-              {#each g.items as item, idx (item.id)}{idx > 0 ? ', ' : ''}{item.name || `#${item.id}`}{/each}
-            </span>
-          {/if}
-        </li>
-      {/each}
-    </ul>
-    <div class="modal-footer">
-      <AlertDialog.Cancel onclick={cancelDelete}>Cancel</AlertDialog.Cancel>
-      <AlertDialog.Action class="secondary-action" onclick={proceedToConfirm}>
-        Remove references…
-      </AlertDialog.Action>
-    </div>
-  </AlertDialog.Content>
-</AlertDialog>
-
-<!-- Phase 5 two-step delete: stage 2 = typed-name confirm. Fires for
-     unreferenced channels directly (no stage 1) and for referenced
-     channels after the operator clicks through the impact dialog.
-     The delete button only enables when the typed name matches exactly. -->
-<AlertDialog bind:open={deleteConfirmOpen}>
-  <AlertDialog.Content>
-    <AlertDialog.Title>
-      {#if deleteReferrers.length > 0}
-        Delete channel and {deleteTotal} reference{deleteTotal === 1 ? '' : 's'}
-      {:else}
-        Delete channel {deleteTarget?.name ?? ''}?
-      {/if}
-    </AlertDialog.Title>
-    <AlertDialog.Description>
-      This cannot be undone. To confirm, type the channel name exactly:
-      <strong>{deleteTarget?.name ?? ''}</strong>
-    </AlertDialog.Description>
-    <label class="confirm-label">
-      Channel name
-      <input
-        type="text"
-        class="confirm-input"
-        bind:value={deleteNameInput}
-        autocomplete="off"
-        aria-label={`Type ${deleteTarget?.name ?? ''} to confirm delete`}
-      />
-    </label>
-    <div class="modal-footer">
-      <AlertDialog.Cancel onclick={cancelDelete}>Cancel</AlertDialog.Cancel>
-      <AlertDialog.Action
-        class="danger-action"
-        onclick={executeDelete}
-        disabled={!deleteNameMatches || deleteInFlight}
-      >
-        {#if deleteReferrers.length > 0}
-          Delete channel and {deleteTotal} reference{deleteTotal === 1 ? '' : 's'}
-        {:else}
-          Delete channel
-        {/if}
-      </AlertDialog.Action>
-    </div>
-  </AlertDialog.Content>
-</AlertDialog>
+<!-- Phase 5 two-step delete flow (extracted to ChannelDeleteFlow) -->
+<ChannelDeleteFlow
+  bind:target={deleteTarget}
+  onDeleted={async () => { await Promise.all([loadChannels(), loadTxTimings()]); }}
+/>
 
 <!-- Phase 3 -- channel PUT 409 "force" confirmation. Mirrors the
      stage-1 delete impact dialog above (same AlertDialog shape, same
@@ -491,7 +332,9 @@
     color: white !important;
   }
 
-  /* Phase 5 two-step delete flow */
+  /* Referrer list — used by the PUT-confirm dialog (Phase 3) still in this
+     file; also duplicated in ChannelDeleteFlow.svelte for its delete dialogs
+     because Svelte scopes <style> per component. */
   .referrer-groups {
     margin: 12px 1.5rem 0 1.5rem;
     padding: 10px 12px;
@@ -505,39 +348,15 @@
   .referrer-groups li + li {
     margin-top: 2px;
   }
-  .referrer-action {
-    color: var(--text-secondary);
-    font-style: italic;
-  }
+  /* .referrer-action used only by delete impact stage — moved to ChannelDeleteFlow.svelte */
   .referrer-items {
     color: var(--text-secondary);
   }
-  .confirm-label {
-    display: block;
-    margin: 12px 1.5rem 0 1.5rem;
-    font-size: 13px;
-    color: var(--text-secondary);
-  }
-  .confirm-input {
-    display: block;
-    width: 100%;
-    margin-top: 4px;
-    padding: 8px 10px;
-    min-height: 40px;
-    background: var(--bg-secondary);
-    border: 1px solid var(--border-color);
-    border-radius: var(--radius);
-    color: var(--text-primary);
-    font: inherit;
-  }
-  .confirm-input:focus-visible {
-    outline: 2px solid var(--color-info, #388bfd);
-    outline-offset: -2px;
-  }
-  :global(.secondary-action) {
-    background: var(--bg-tertiary) !important;
-    color: var(--text-primary) !important;
-  }
+
+  /* :global(.secondary-action) moved to ChannelDeleteFlow.svelte — no longer
+     used in this file (delete impact stage extracted). */
+
+  /* confirm-label / confirm-input moved to ChannelDeleteFlow.svelte. */
 
   /* Phase 3 -- channel PUT 409 confirm dialog copy. Inline "Reason:"
      clause reflects the server's concrete explanation (e.g. "no
