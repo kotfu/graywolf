@@ -2,3 +2,11 @@
 pre-build = [
     "dpkg --add-architecture arm64 && apt-get update && apt-get install -y libasound2-dev:arm64 libudev-dev:arm64 unzip && curl -Lo /tmp/protoc.zip https://github.com/protocolbuffers/protobuf/releases/download/v28.3/protoc-28.3-linux-x86_64.zip && unzip -o /tmp/protoc.zip -d /usr/local bin/protoc && chmod +x /usr/local/bin/protoc && rm /tmp/protoc.zip",
 ]
+
+# ARMv6 hard-float, for old Raspberry Pi hardware (Pi 1, Pi Zero). The stock
+# cross-rs image (Ubuntu Focal) no longer ships installable libasound2-dev:armhf
+# / libudev-dev:armhf in its armhf port, and ARMv7-tuned armhf packages also
+# trip cross-rs's ARMv6 mismatch warning. We use a custom Debian Bookworm image
+# instead; see packaging/docker/Dockerfile.armv6-cross for the rationale.
+[target.arm-unknown-linux-gnueabihf]
+dockerfile = "packaging/docker/Dockerfile.armv6-cross"

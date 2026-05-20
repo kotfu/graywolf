@@ -24,9 +24,16 @@ builds:
     goarch:
       - amd64
       - arm64
+      - arm
+    goarm:
+      - "6"
     ignore:
       - goos: windows
         goarch: arm64
+      - goos: windows
+        goarch: arm
+      - goos: darwin
+        goarch: arm
 
 archives:
   - id: graywolf
@@ -39,11 +46,11 @@ archives:
       {{- .Version }}_
       {{- if eq .Os "darwin" }}macOS{{ else }}{{ .Os }}{{ end }}_
       {{- if eq .Arch "amd64" }}x86_64
-      {{- else }}{{ .Arch }}{{ end }}
+      {{- else }}{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}{{ end }}
     files:
       - LICENSE*
       - README*
-      - src: "rust-bin/{{ .Os }}_{{ .Arch }}/graywolf-modem{{ if eq .Os \"windows\" }}.exe{{ end }}"
+      - src: "rust-bin/{{ .Os }}_{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}/graywolf-modem{{ if eq .Os \"windows\" }}.exe{{ end }}"
         dst: .
         strip_parent: true
 
@@ -65,7 +72,7 @@ nfpms:
       - src: packaging/udev/99-graywolf-cm108.rules
         dst: /etc/udev/rules.d/99-graywolf-cm108.rules
         type: config
-      - src: "rust-bin/linux_{{ .Arch }}/graywolf-modem"
+      - src: "rust-bin/linux_{{ .Arch }}{{ if .Arm }}v{{ .Arm }}{{ end }}/graywolf-modem"
         dst: /usr/bin/graywolf-modem
     scripts:
       postinstall: packaging/scripts/postinstall.sh

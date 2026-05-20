@@ -1,0 +1,95 @@
+# Cross-compile environment for graywolf-modem targeting ARMv6 hard-float
+# (Raspberry Pi 1, Pi Zero, Pi Zero W). Used by cross-rs via the
+# `dockerfile = ...` directive in ../../Cross.toml.
+#
+# Why two stages: cross-rs's stock arm-unknown-linux-gnueabihf image is
+# Ubuntu Focal-based, and its armhf port has aged out (no installable
+# libasound2-dev:armhf or libudev-dev:armhf). Debian's armhf is built for
+# ARMv7+VFPv3, not the ARMv6+VFPv2 a Pi 1 can execute -- a hello-world
+# binary built against Debian's ARMv7 CRT segfaulted on a Pi B+. We need a
+# true ARMv6 sysroot for the CRT, libc, and runtime libs, and Raspbian is
+# the only widely-distributed Debian rebuild that targets ARMv6.
+#
+# Mixing armhf packages from Raspbian's apt archive with amd64 packages
+# from Debian's archive doesn't work: Debian's Multi-Arch:same rule
+# requires every libc6-dev variant to be at the exact same package
+# version string, and Raspbian always tags its rebuilds with "+rpi1".
+# So we use a multi-stage build instead: stage 1 is a genuine
+# linux/arm/v6 Raspbian image (no architecture mixing inside it), and
+# stage 2 copies its rootfs into /opt/armv6-sysroot/ where the cross
+# compiler picks it up.
+
+# Stage 1: real ARMv6 Raspbian, install just the headers/libs we'll link
+# against. The first build of this stage is slow because Docker Desktop
+# runs it under QEMU emulation; subsequent builds reuse the cached layers.
+FROM --platform=linux/arm/v6 balenalib/raspberry-pi-debian:bookworm AS rpi-sysroot
+# libgcc-12-dev pulls in the ARMv6-built crtbegin.o, crtend.o, libgcc.a
+# and libgcc_eh.a. We'll splice those into Debian's cross-gcc install in
+# stage 2; without them, the cross-gcc statically links its own (ARMv7)
+# runtime and bumps the final binary's .ARM.attributes to v7 even when
+# --sysroot points at this Raspbian rootfs.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        libc6-dev \
+        libasound2-dev \
+        libudev-dev \
+        libgcc-12-dev && \
+    rm -rf /var/lib/apt/lists/*
+
+# Stage 2: amd64 build environment with the host toolchain + cross-gcc,
+# plus the ARMv6 sysroot copied out of stage 1.
+FROM debian:bookworm-slim
+
+ARG DEBIAN_FRONTEND=noninteractive
+
+# Pull the ARMv6 sysroot (entire rootfs; the cross-gcc only consumes
+# /usr/include/... and /usr/lib/arm-linux-gnueabihf/..., but copying the
+# whole thing is simpler than enumerating paths and the build image is
+# ephemeral).
+COPY --from=rpi-sysroot / /opt/armv6-sysroot/
+
+# Host (amd64) tooling: native gcc for Cargo build scripts and proc-macro
+# crates, plus the arm-linux-gnueabihf cross compiler that links our
+# Rust output against the ARMv6 sysroot. We do NOT install
+# libc6-dev-armhf-cross -- that's Debian's ARMv7 sysroot, which is what
+# we're avoiding.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        ca-certificates \
+        curl \
+        unzip \
+        pkg-config \
+        make \
+        gcc \
+        libc6-dev \
+        gcc-arm-linux-gnueabihf && \
+    rm -rf /var/lib/apt/lists/*
+
+# Replace Debian's ARMv7 cross-gcc runtime objects with the ARMv6 versions
+# from the Raspbian sysroot. --sysroot can't help here: gcc looks for its
+# own runtime (crtbegin.o, crtend.o, libgcc.a, libgcc_eh.a) relative to
+# its install prefix, not relative to the sysroot. So we overwrite them
+# in place. Both sides are gcc 12.2.x, just compiled for different -march.
+RUN cp -v \
+        /opt/armv6-sysroot/usr/lib/gcc/arm-linux-gnueabihf/12/crtbegin*.o \
+        /opt/armv6-sysroot/usr/lib/gcc/arm-linux-gnueabihf/12/crtend*.o \
+        /opt/armv6-sysroot/usr/lib/gcc/arm-linux-gnueabihf/12/libgcc.a \
+        /opt/armv6-sysroot/usr/lib/gcc/arm-linux-gnueabihf/12/libgcc_eh.a \
+        /usr/lib/gcc-cross/arm-linux-gnueabihf/12/
+
+# protoc for graywolf-modem's prost-build invocation.
+RUN curl -fsSL -o /tmp/protoc.zip \
+        https://github.com/protocolbuffers/protobuf/releases/download/v28.3/protoc-28.3-linux-x86_64.zip && \
+    unzip -q -o /tmp/protoc.zip -d /usr/local bin/protoc && \
+    chmod +x /usr/local/bin/protoc && \
+    rm /tmp/protoc.zip
+
+# Point the cross-gcc at the Raspbian sysroot and tell pkg-config to look
+# there too. The matching --sysroot=/opt/armv6-sysroot link-arg is set in
+# the workspace's .cargo/config.toml so rustc passes it on each link.
+# -mcpu=arm1176jzf-s is the Pi 1 / Pi Zero core.
+ENV CARGO_TARGET_ARM_UNKNOWN_LINUX_GNUEABIHF_LINKER=arm-linux-gnueabihf-gcc \
+    CC_arm_unknown_linux_gnueabihf=arm-linux-gnueabihf-gcc \
+    CXX_arm_unknown_linux_gnueabihf=arm-linux-gnueabihf-g++ \
+    CFLAGS_arm_unknown_linux_gnueabihf="-mcpu=arm1176jzf-s -mfpu=vfp -mfloat-abi=hard --sysroot=/opt/armv6-sysroot" \
+    PKG_CONFIG_ALLOW_CROSS=1 \
+    PKG_CONFIG_SYSROOT_DIR=/opt/armv6-sysroot \
+    PKG_CONFIG_PATH=/opt/armv6-sysroot/usr/lib/arm-linux-gnueabihf/pkgconfig
