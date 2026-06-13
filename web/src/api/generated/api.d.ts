@@ -2698,7 +2698,11 @@ export interface components {
             type?: string;
         };
         "dto.LocalBounds": {
-            [key: string]: number[];
+            [key: string]: components["schemas"]["dto.LocalBoundsEntry"];
+        };
+        "dto.LocalBoundsEntry": {
+            bbox?: number[];
+            maxZoom?: number;
         };
         "dto.MapsConfigRequest": {
             source?: string;

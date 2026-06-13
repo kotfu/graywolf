@@ -1509,9 +1509,16 @@ definitions:
     type: object
   dto.LocalBounds:
     additionalProperties:
-      items:
-        type: number
-      type: array
+      $ref: '#/definitions/dto.LocalBoundsEntry'
+    type: object
+  dto.LocalBoundsEntry:
+    properties:
+      bbox:
+        items:
+          type: number
+        type: array
+      maxZoom:
+        type: integer
     type: object
   dto.MapsConfigRequest:
     properties:

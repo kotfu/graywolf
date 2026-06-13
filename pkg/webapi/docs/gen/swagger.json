@@ -9534,9 +9534,20 @@
         "dto.LocalBounds": {
             "type": "object",
             "additionalProperties": {
-                "type": "array",
-                "items": {
-                    "type": "number"
+                "$ref": "#/definitions/dto.LocalBoundsEntry"
+            }
+        },
+        "dto.LocalBoundsEntry": {
+            "type": "object",
+            "properties": {
+                "bbox": {
+                    "type": "array",
+                    "items": {
+                        "type": "number"
+                    }
+                },
+                "maxZoom": {
+                    "type": "integer"
                 }
             }
         },
