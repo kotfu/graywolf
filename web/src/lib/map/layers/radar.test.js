@@ -85,3 +85,12 @@ test('world raster still cache-busts on a time-bucket rollover', () => {
   layer.refresh();
   assert.match(map._sources['radar-tiles'].tiles[0], /\?v=1$/);
 });
+
+test('destroy swallows errors when the map is already torn down', () => {
+  const map = fakeMap();
+  const layer = mountRadarLayer(map, { visible: true, opacity: 0.6, now: () => 0 });
+  // After map.remove(), MapLibre's getLayer throws because internal state is
+  // gone; teardown order can run a layer's destroy() against a removed map.
+  map.getLayer = () => { throw new TypeError("Cannot read properties of undefined (reading 'getLayer')"); };
+  assert.doesNotThrow(() => layer.destroy());
+});

@@ -16,6 +16,7 @@
   import { catalogStore } from '../maps/catalog-store.svelte.js';
   import { localBoundsStore } from '../maps/local-bounds-store.svelte.js';
   import { createFederatedProtocol } from './sources/gw-federated-protocol.js';
+  import { absolutizeStyleUrls } from './style-urls.js';
 
   let { initialCenter = [-98, 39], initialZoom = 4, oncreate = null } = $props();
 
@@ -113,7 +114,7 @@
         }
       }
     }
-    return style;
+    return absolutizeStyleUrls(style);
   }
 
   async function buildStyle() {
