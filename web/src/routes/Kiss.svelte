@@ -1,6 +1,6 @@
 <script>
   import { onMount, onDestroy } from 'svelte';
-  import { Button, Input, Select, Badge, Checkbox } from '@chrissnell/chonky-ui';
+  import { Button, Input, Select, Badge, Checkbox, Toggle } from '@chrissnell/chonky-ui';
   import { api, kissBt, kissUsb, kissSerial } from '../lib/api.js';
   import { Platform } from '../lib/platform.js';
   import { toasts } from '../lib/stores.js';
@@ -77,12 +77,19 @@
   let pollTimer = null;
   let clockTimer = null;
 
+  // Type and Mode cells render a <Badge>, whose 1px border + 0.4rem padding
+  // insets its text from the cell's left edge. Indent those headers by the
+  // same amount so the column label lines up with the badge below it. The
+  // toggle cell gets vertical-align:middle so the switch centers in the row
+  // instead of sitting on the baseline.
+  const BADGE_HEAD_INDENT = 'padding-left: calc(0.4rem + 1px);';
   const columns = [
-    { key: 'type', label: 'Type' },
+    { key: 'type', label: 'Type', headStyle: BADGE_HEAD_INDENT },
     { key: 'endpoint', label: 'Endpoint' },
     { key: 'channel', label: 'Channel' },
-    { key: 'mode', label: 'Mode' },
+    { key: 'mode', label: 'Mode', headStyle: BADGE_HEAD_INDENT },
     { key: 'status', label: 'Status' },
+    { key: 'enabled', label: 'Enabled', tdStyle: 'vertical-align: middle;' },
   ];
 
   // Platform-conditional type menu. On Android, operators see the
@@ -861,7 +868,7 @@
   rows={items}
   onEdit={openEdit}
   onDelete={handleDelete}
-  cells={{ type: typeCell, endpoint: endpointCell, mode: modeCell, status: statusCell }}
+  cells={{ type: typeCell, endpoint: endpointCell, mode: modeCell, status: statusCell, enabled: enabledCell }}
 />
 
 {#snippet modeCell(value, _row)}
@@ -890,66 +897,72 @@
 
 {#snippet statusCell(_value, row)}
   {@const disabled = row.enabled === false}
+  <!-- Only tcp-client rows carry live connection diagnostics worth an
+       expandable panel (peer, reconnect count, backoff, last error,
+       Retry now). For server / serial / disabled rows the status is a
+       plain badge — the old expand popped a gray box that just echoed
+       the Endpoint column and buried the disable action (GRA-85). -->
+  {@const expandable = !disabled && row.type === 'tcp-client'}
   <div class="status-cell" data-tick={clockTick}>
     <!-- clockTick is in data-tick so any change triggers snippet
          re-render; that propagates to the countdownText call below. -->
-    <button
-      type="button"
-      class="status-btn"
-      aria-expanded={expandedId === row.id}
-      aria-controls={`status-detail-${row.id}`}
-      aria-label={`Status for KISS interface ${row.id}: ${disabled ? 'Disabled' : stateLabel(row.state)}`}
-      onclick={(e) => { e.stopPropagation(); toggleExpanded(row.id); }}
-    >
-      {#if disabled}
-        <!-- A disabled interface is not running, so live supervisor
-             state is meaningless. Show a neutral "Disabled" pill instead
-             of the stale/empty state. -->
+    {#if disabled}
+      <!-- A disabled interface is not running, so live supervisor
+           state is meaningless. Show a neutral "Disabled" pill. -->
+      <span class="status-static">
         <span class="health-disabled" aria-hidden="true">○</span>
         <Badge>Disabled</Badge>
-      {:else}
-        <span class={healthClass(row.state)} aria-hidden="true">{healthGlyph(row.state)}</span>
-        <Badge variant={stateBadgeVariant(row.state)}>{stateLabel(row.state)}</Badge>
-        {#if row.state === 'backoff'}
-          <span class="countdown">{countdownText(row.retry_at_unix_ms)}</span>
-        {/if}
-      {/if}
-    </button>
-    {#if expandedId === row.id}
+      </span>
+    {:else if expandable}
+      <button
+        type="button"
+        class="status-btn"
+        aria-expanded={expandedId === row.id}
+        aria-controls={`status-detail-${row.id}`}
+        aria-label={`Connection detail for KISS interface ${row.id}: ${stateLabel(row.state)}`}
+        onclick={(e) => { e.stopPropagation(); toggleExpanded(row.id); }}
+      >
+        {@render liveStatus(row)}
+      </button>
+    {:else}
+      <span class="status-static">{@render liveStatus(row)}</span>
+    {/if}
+    {#if expandable && expandedId === row.id}
       <div id={`status-detail-${row.id}`} class="status-detail" role="region" aria-label="Status detail">
-        {#if disabled}
-          <div class="detail-row"><span class="detail-label">Endpoint:</span> <span>{endpointText(row)}</span></div>
-          <div class="detail-row detail-muted">Disabled — the device is released and reconnection is paused. The configuration is preserved.</div>
-        {:else if row.type === 'tcp-client'}
-          <div class="detail-row"><span class="detail-label">Peer:</span> <span>{row.peer_addr || `${row.remote_host}:${row.remote_port}`}</span></div>
-          <div class="detail-row"><span class="detail-label">Connected since:</span> <span>{formatLocalTime(row.connected_since) || '—'}</span></div>
-          <div class="detail-row"><span class="detail-label">Reconnect count:</span> <span>{row.reconnect_count || 0}</span></div>
-          <div class="detail-row"><span class="detail-label">Backoff:</span> <span>{row.backoff_seconds || 0}s</span></div>
-          {#if row.last_error}
-            <div class="detail-row detail-err"><span class="detail-label">Last error:</span> <span>{row.last_error}</span></div>
-          {/if}
-        {:else if row.type === 'tcp'}
-          <div class="detail-row"><span class="detail-label">Listening:</span> <span>{row.local_only ? `127.0.0.1:${row.tcp_port} (local only)` : `:${row.tcp_port}`}</span></div>
-        {:else if row.type === 'bluetooth'}
-          <div class="detail-row"><span class="detail-label">Device:</span> <span>{friendlyDevice(row) || '—'}</span></div>
-        {:else if row.type === 'usbserial'}
-          <div class="detail-row"><span class="detail-label">Device:</span> <span>{row.serial_device || '—'}</span></div>
-        {:else}
-          <div class="detail-row"><span class="detail-label">Device:</span> <span>{row.serial_device || '—'}</span></div>
+        <div class="detail-row"><span class="detail-label">Peer:</span> <span>{row.peer_addr || `${row.remote_host}:${row.remote_port}`}</span></div>
+        <div class="detail-row"><span class="detail-label">Connected since:</span> <span>{formatLocalTime(row.connected_since) || '—'}</span></div>
+        <div class="detail-row"><span class="detail-label">Reconnect count:</span> <span>{row.reconnect_count || 0}</span></div>
+        <div class="detail-row"><span class="detail-label">Backoff:</span> <span>{row.backoff_seconds || 0}s</span></div>
+        {#if row.last_error}
+          <div class="detail-row detail-err"><span class="detail-label">Last error:</span> <span>{row.last_error}</span></div>
         {/if}
-        <div class="detail-actions">
-          {#if !disabled && row.type === 'tcp-client' && canRetryNow(row.state)}
+        {#if canRetryNow(row.state)}
+          <div class="detail-actions">
             <Button variant="primary" onclick={(e) => { e.stopPropagation?.(); handleRetryNow(row); }}>Retry now</Button>
-          {/if}
-          {#if disabled}
-            <Button variant="primary" onclick={(e) => { e.stopPropagation?.(); handleToggleEnabled(row); }}>Enable</Button>
-          {:else}
-            <Button variant="ghost" onclick={(e) => { e.stopPropagation?.(); handleToggleEnabled(row); }}>Disable</Button>
-          {/if}
-        </div>
+          </div>
+        {/if}
       </div>
     {/if}
   </div>
+{/snippet}
+
+{#snippet liveStatus(row)}
+  <span class={healthClass(row.state)} aria-hidden="true">{healthGlyph(row.state)}</span>
+  <Badge variant={stateBadgeVariant(row.state)}>{stateLabel(row.state)}</Badge>
+  {#if row.state === 'backoff'}
+    <span class="countdown">{countdownText(row.retry_at_unix_ms)}</span>
+  {/if}
+{/snippet}
+
+{#snippet enabledCell(_value, row)}
+  <!-- Dedicated enable/disable toggle (GRA-85). Disabling stops the
+       supervisor and releases the device; enabling restarts it. The
+       saved config is preserved either way. -->
+  <Toggle
+    checked={row.enabled !== false}
+    onCheckedChange={() => handleToggleEnabled(row)}
+    aria-label={`${row.enabled === false ? 'Enable' : 'Disable'} KISS interface ${row.id}`}
+  />
 {/snippet}
 
 <Modal bind:open={modalOpen} title={editing ? 'Edit KISS' : 'New KISS Interface'}>
@@ -1276,6 +1289,15 @@
     border-color: var(--border-color);
     outline: none;
   }
+  /* Non-interactive status (server / serial / disabled rows). Mirrors
+     the button's inline layout/padding so badges line up whether or not
+     the row is expandable, but without the hover affordance. */
+  .status-static {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 2px 6px;
+  }
   .health-live { color: var(--color-success, #4caf50); font-size: 14px; }
   .health-down { color: var(--color-warning, #ffa000); font-size: 14px; }
   .health-disabled { color: var(--text-secondary, #9e9e9e); font-size: 14px; }
@@ -1303,10 +1325,6 @@
   }
   .detail-err {
     color: var(--color-error, #d32f2f);
-  }
-  .detail-muted {
-    color: var(--text-secondary);
-    font-style: italic;
   }
   .detail-actions {
     margin-top: 8px;
