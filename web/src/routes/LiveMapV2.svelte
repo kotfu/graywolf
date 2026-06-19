@@ -31,6 +31,10 @@
   import { renderStationPopupHTML } from '../lib/map/popup.js';
   import { unitsState } from '../lib/settings/units-store.svelte.js';
   import { mapState, MY_POSITION_ZOOM } from '../lib/map/map-store.svelte.js';
+  import {
+    LAYER_TOGGLES_KEY,
+    parseLayerToggles,
+  } from '../lib/map/layer-toggles-core.js';
   import { toMaidenhead } from '../lib/map/maidenhead.js';
   import { fmtLat, fmtLon, timeAgo } from '../lib/map/popup-helpers.js';
   import { clockOffset, formatOffsetMagnitude } from '../lib/map/clock-offset.svelte.js';
@@ -173,15 +177,11 @@
   let isMobile = $state(false);
   let panelOpen = $state(false);
   let layerCardCollapsed = $state(false);
-  let layerToggles = $state({
-    stations: true,
-    trails: true,
-    weather: true,
-    myPosition: true,
-    fixedPoints: true,
-    directRxOnly: false,
-    rfOnly: false,
-  });
+  // Layer toggles are a per-browser preference (like the radar settings
+  // above): persisted to localStorage so unchecking e.g. Trails or Fixed
+  // Points survives navigating away and back. The load/merge logic lives in
+  // layer-toggles-core.js (pure, unit-tested); here we only read/write storage.
+  let layerToggles = $state(parseLayerToggles(localStorage.getItem(LAYER_TOGGLES_KEY)));
 
   // Add-fixed-point dialog state. Opened from the context menu with the
   // clicked coordinates; onConfirm drops the point into the store.
@@ -585,6 +585,11 @@
     fixedPointsLayer?.refresh();
   });
 
+  // Persist the whole toggle set on any change. JSON.stringify reads every
+  // property, so Svelte tracks each one as a dependency.
+  $effect(() => {
+    localStorage.setItem(LAYER_TOGGLES_KEY, JSON.stringify(layerToggles));
+  });
   // Push the layer toggles into the layer modules. We MUST read the
   // reactive value before the optional-chain so Svelte 5 tracks it as a
   // dependency on the initial run. With `layer?.setVisible(toggle)`, if
