@@ -396,10 +396,14 @@
     btn.type = 'button';
     btn.className = 'gw-fixed-popup-delete';
     btn.textContent = 'Delete point';
-    btn.addEventListener('click', () => {
-      fixedPointsStore.remove(point.id);
-      closePopup();
-      toasts.success(`Removed "${name}"`);
+    btn.addEventListener('click', async () => {
+      try {
+        await fixedPointsStore.remove(point.id);
+        closePopup();
+        toasts.success(`Removed "${name}"`);
+      } catch (err) {
+        toasts.error(`Could not remove point: ${err.message}`);
+      }
     });
     div.append(title, coords, btn);
 
@@ -501,12 +505,18 @@
     fixedPointsLayer = mountFixedPointsLayer(map, () => fixedPointsStore.points, {
       onMarkerClick: (point) => openFixedPointPopup(map, point),
     });
-    // Render any points already in the store at mount time. The refresh
-    // $effect only fires on a points.length change, and on a remount (e.g.
-    // navigating back to the map) the layer is created here -- after that
-    // effect's first run -- so without this call pre-existing points stay
-    // invisible until the operator adds another one. (graywolf#347)
+    // Render any points already in the store at mount time. On a remount
+    // (e.g. navigating back to the map) the store singleton still holds the
+    // last set, and the layer is created here -- after the refresh $effect's
+    // first run -- so without this call pre-existing points stay invisible
+    // until the next store mutation. (graywolf#347)
     fixedPointsLayer.refresh();
+    // Then pull the server-side set so points placed on another device (or
+    // before a browser-data wipe) show up here. load() reassigns the store
+    // array, so the refresh $effect re-runs once this resolves. (graywolf#347)
+    fixedPointsStore.load().catch((err) => {
+      toasts.error(`Could not load fixed points: ${err.message}`);
+    });
     myPositionLayer = mountMyPositionLayer(map, () => dataStore.myPosition, {
       onMarkerEnter: () => {
         if (activePopup) return;
@@ -680,8 +690,11 @@
 
   // Fixed points change independently of the station poll (operator adds /
   // deletes them), so they get their own refresh effect tracking the store.
+  // The store reassigns `points` to a new array on every load/add/remove, so
+  // reading the array here makes the effect re-run on each mutation
+  // (including a same-length replacement from load()).
   $effect(() => {
-    const _len = fixedPointsStore.points.length;
+    const _points = fixedPointsStore.points;
     fixedPointsLayer?.refresh();
   });
 
@@ -1153,16 +1166,20 @@
     bind:open={fpDialog.open}
     lat={fpDialog.lat}
     lon={fpDialog.lon}
-    onConfirm={({ name, table, symbol, overlay }) => {
-      const p = fixedPointsStore.add({
-        name,
-        table,
-        symbol,
-        overlay,
-        lat: fpDialog.lat,
-        lon: fpDialog.lon,
-      });
-      toasts.success(`Added "${p.name}"`);
+    onConfirm={async ({ name, table, symbol, overlay }) => {
+      try {
+        const p = await fixedPointsStore.add({
+          name,
+          table,
+          symbol,
+          overlay,
+          lat: fpDialog.lat,
+          lon: fpDialog.lon,
+        });
+        toasts.success(`Added "${p.name}"`);
+      } catch (err) {
+        toasts.error(`Could not add point: ${err.message}`);
+      }
     }}
   />
 
