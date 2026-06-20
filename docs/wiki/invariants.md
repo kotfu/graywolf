@@ -1094,3 +1094,49 @@ Source: [`../../pkg/configstore/migrate_downloads.go`](../../pkg/configstore/mig
 [`../../pkg/mapscache/manager.go`](../../pkg/mapscache/manager.go) (`MigrateLegacyArchives`, `repairWorldArchive`);
 [`../../pkg/mapsslug/slug.go`](../../pkg/mapsslug/slug.go);
 [`../../web/src/lib/maps/catalog-tree.js`](../../web/src/lib/maps/catalog-tree.js) (`buildWorldNode`).
+
+### 50. REST client surfaces a lost connection; it does not fabricate data in production
+
+A genuine network failure (a thrown `fetch`) in the legacy REST client
+[`web/src/lib/api.js`](../../web/src/lib/api.js) falls back to canned mock
+data **only when `import.meta.env?.DEV` is truthy**. In a production build
+Vite resolves that to `false`, so the mock branch is dead code (`getMockData`
+and the whole mock dataset are tree-shaken out -- verified by grepping the
+built bundle) and a thrown `fetch` instead `throw`s `ApiError(0, …)` and calls
+`markDisconnected()`. Any response received -- even a 4xx/5xx -- calls
+`markConnected()`, since it proves the server is reachable.
+
+Both `api.js` and the live-map data store
+[`web/src/lib/map/data-store.svelte.js`](../../web/src/lib/map/data-store.svelte.js)
+report into the shared store
+[`web/src/lib/stores/connection.js`](../../web/src/lib/stores/connection.js)
+(`online`, `markConnected`, `markDisconnected`). The store is plain
+`svelte/store` `writable`, **not** a `$state` runes module, because `api.js`
+is imported by `node --test`, which has no Svelte compiler. Screens read
+`online` to swap stale values for `--` placeholders and a lost-connection
+indicator: the Dashboard clears `status`/`position`/`packets` and shows a red
+banner; the APRS Logs screen shows a red "error" dot and no entries; the map
+status bar shows the red "error" dot. The data store's `start()` seeds
+`pollingState` from `get(online)` so switching *to* the map after the
+connection was already lost shows "error" immediately rather than a
+misleading green "live" dot.
+
+*Why:* before GH #365, a disconnected browser silently rendered the dev mock
+channels (`VHF APRS`/`9600 Data`), mock position (`35.0N 106.0W`), and mock
+beacons as if they were live, with a green status dot -- the operator had no
+way to tell the connection was lost.
+
+*How to apply:* use `import.meta.env?.DEV` (optional chaining) so the check
+is safe under `node --test`, where `import.meta.env` is `undefined` -- there
+it reads falsy, exercising the production throw path. `api.test.js` covers
+this with a rejected-fetch case asserting `ApiError(0)` and `online === false`.
+Only flip the connection store to offline on a genuine network failure -- in
+the data store that means gating `markDisconnected()` on `e instanceof
+TypeError`, since the manual HTTP-status `throw`s (incl. 401) come from a
+reachable server and already ran `markConnected()`.
+
+Source: [`../../web/src/lib/api.js`](../../web/src/lib/api.js),
+[`../../web/src/lib/stores/connection.js`](../../web/src/lib/stores/connection.js),
+[`../../web/src/lib/map/data-store.svelte.js`](../../web/src/lib/map/data-store.svelte.js),
+[`../../web/src/routes/Dashboard.svelte`](../../web/src/routes/Dashboard.svelte),
+[`../../web/src/routes/Logs.svelte`](../../web/src/routes/Logs.svelte).
