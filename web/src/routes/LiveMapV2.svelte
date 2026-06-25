@@ -24,7 +24,7 @@
     RADAR_REGION_WORLD,
   } from '../lib/map/sources/radar-source.js';
   import { mountFrontsLayer } from '../lib/map/layers/fronts.js';
-  import { frontsProvider } from '../lib/map/sources/fronts-source.js';
+  import { frontsProvider, frontsWorldProvider } from '../lib/map/sources/fronts-source.js';
   import { createRadarFrames } from '../lib/map/radar-frames.svelte.js';
   import { mapsState } from '../lib/settings/maps-store.svelte.js';
   import { mountFixedPointsLayer } from '../lib/map/layers/fixed-points.js';
@@ -206,50 +206,74 @@
   // attaches the token to it without any wiring here.
   let frontsToken = null;
   let frontsPollTimer = null;
+  // One issuance marker per source (WPC analysis + model-derived world). Either
+  // changing triggers a reload of both GeoJSON sources (the layer's reload()
+  // refreshes both -- cheap, and they share the toggle).
   let lastFrontsIssued = null;
+  let lastFrontsWorldIssued = null;
   // De-dupe diagnostics like warnRadar: a persistent failure would otherwise
-  // warn every poll. Only log when the failure stage changes.
-  let lastFrontsLoadStatus = null;
+  // warn every poll. The de-dupe is keyed by status string and tracked PER
+  // SOURCE: a healthy `na` must not clear a persistently-failing `world`'s
+  // warning (the normal state while the world source is rolling out). A source
+  // clears only its own statuses on success.
+  const frontsWarned = new Set();
   function warnFronts(status, ...args) {
-    if (lastFrontsLoadStatus === status) return;
-    lastFrontsLoadStatus = status;
+    if (frontsWarned.has(status)) return;
+    frontsWarned.add(status);
     console.warn(...args);
+  }
+  function clearFrontsWarn(label) {
+    for (const s of [...frontsWarned]) if (s.startsWith(`${label}-`)) frontsWarned.delete(s);
+  }
+  // Fetch one fronts manifest and return its issuance marker, or undefined on
+  // any failure (network/401/HTTP/parse). A 401 clears the token to re-reveal.
+  async function fetchFrontsIssued(manifestUrl, label) {
+    const url = `${manifestUrl}?t=${encodeURIComponent(frontsToken)}`;
+    let resp;
+    try {
+      resp = await fetch(url);
+    } catch (e) {
+      warnFronts(`${label}-network`, `[fronts] ${label} manifest fetch failed (network/CORS)`, e);
+      return undefined;
+    }
+    if (resp.status === 401) {
+      frontsToken = null; // stale token -- re-reveal next poll
+      warnFronts(`${label}-401`, `[fronts] ${label} manifest 401 -- token rejected; will re-reveal`);
+      return undefined;
+    }
+    if (!resp.ok) {
+      warnFronts(`${label}-${resp.status}`, `[fronts] ${label} manifest fetch HTTP ${resp.status}`);
+      return undefined;
+    }
+    try {
+      const json = await resp.json();
+      const issued = json?.issued ?? json?.latest ?? null;
+      clearFrontsWarn(label); // this source recovered
+      return issued;
+    } catch (e) {
+      warnFronts(`${label}-parse`, `[fronts] ${label} manifest JSON parse failed`, e);
+      return undefined;
+    }
   }
   async function pollFrontsManifest() {
     if (!mapsState.registered) return;
     if (!frontsToken) frontsToken = await mapsState.revealToken();
     if (!frontsToken) return;
-    const url = `${frontsProvider().manifestUrl}?t=${encodeURIComponent(frontsToken)}`;
-    let resp;
-    try {
-      resp = await fetch(url);
-    } catch (e) {
-      warnFronts('network', '[fronts] manifest fetch failed (network/CORS)', e);
-      return;
+    const na = await fetchFrontsIssued(frontsProvider().manifestUrl, 'na');
+    // If `na` got a 401 it cleared the token; don't fire a guaranteed second
+    // 401 at the world manifest -- re-reveal on the next poll instead.
+    if (!frontsToken) return;
+    const world = await fetchFrontsIssued(frontsWorldProvider().manifestUrl, 'world');
+    let changed = false;
+    if (na !== undefined && na != null) {
+      if (lastFrontsIssued !== null && na !== lastFrontsIssued) changed = true;
+      lastFrontsIssued = na;
     }
-    if (resp.status === 401) {
-      frontsToken = null; // stale token -- re-reveal next poll
-      warnFronts(401, '[fronts] manifest 401 -- token rejected; will re-reveal');
-      return;
+    if (world !== undefined && world != null) {
+      if (lastFrontsWorldIssued !== null && world !== lastFrontsWorldIssued) changed = true;
+      lastFrontsWorldIssued = world;
     }
-    if (!resp.ok) {
-      warnFronts(resp.status, `[fronts] manifest fetch HTTP ${resp.status}`);
-      return;
-    }
-    let issued;
-    try {
-      const json = await resp.json();
-      issued = json?.issued ?? json?.latest ?? null;
-    } catch (e) {
-      warnFronts('parse', '[fronts] manifest JSON parse failed', e);
-      return;
-    }
-    lastFrontsLoadStatus = null; // recovered
-    if (issued == null) return;
-    if (lastFrontsIssued !== null && issued !== lastFrontsIssued) {
-      frontsLayer?.reload();
-    }
-    lastFrontsIssued = issued;
+    if (changed) frontsLayer?.reload();
   }
   function startFrontsPolling() {
     if (frontsPollTimer) return;
