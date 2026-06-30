@@ -108,7 +108,8 @@
     border-radius: var(--radius, 4px);
     border: 1px solid var(--accent);
     background: var(--accent);
-    color: var(--accent-fg, #fff);
+    color: var(--color-bg, #0d1117);
+    transition: filter 0.15s;
   }
   .banner-reload:hover,
   .banner-reload:focus-visible {
