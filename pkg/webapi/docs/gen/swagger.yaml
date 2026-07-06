@@ -1183,6 +1183,32 @@ definitions:
       space_freq:
         type: integer
     type: object
+  dto.ConversationPrefsRequest:
+    properties:
+      send_path:
+        description: |-
+          SendPath overrides transport for this conversation. Empty ('')
+          means "inherit the global fallback policy"; otherwise one of
+          rf_only | is_only | both.
+        type: string
+      wait_for_ack:
+        description: |-
+          WaitForAck, when false, sends DMs to this contact once and skips
+          the retry ladder (no re-sends) — for handhelds that never ACK.
+          Defaults true.
+        type: boolean
+    type: object
+  dto.ConversationPrefsResponse:
+    properties:
+      send_path:
+        type: string
+      thread_key:
+        type: string
+      thread_kind:
+        type: string
+      wait_for_ack:
+        type: boolean
+    type: object
   dto.ConversationSummary:
     properties:
       alias:
@@ -6290,6 +6316,81 @@ paths:
       security:
         - CookieAuth: []
       summary: List conversations
+      tags:
+        - messages
+  /messages/conversations/{kind}/{key}/prefs:
+    get:
+      operationId: getConversationPrefs
+      parameters:
+        - description: thread kind (dm|tactical)
+          in: path
+          name: kind
+          required: true
+          type: string
+        - description: peer callsign or tactical label
+          in: path
+          name: key
+          required: true
+          type: string
+      produces:
+        - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.ConversationPrefsResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/webtypes.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/webtypes.ErrorResponse'
+      security:
+        - CookieAuth: []
+      summary: Get conversation preferences
+      tags:
+        - messages
+    put:
+      consumes:
+        - application/json
+      operationId: putConversationPrefs
+      parameters:
+        - description: thread kind (dm|tactical)
+          in: path
+          name: kind
+          required: true
+          type: string
+        - description: peer callsign or tactical label
+          in: path
+          name: key
+          required: true
+          type: string
+        - description: Preferences
+          in: body
+          name: body
+          required: true
+          schema:
+            $ref: '#/definitions/dto.ConversationPrefsRequest'
+      produces:
+        - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/dto.ConversationPrefsResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/webtypes.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/webtypes.ErrorResponse'
+      security:
+        - CookieAuth: []
+      summary: Update conversation preferences
       tags:
         - messages
   /messages/events:

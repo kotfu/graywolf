@@ -4803,6 +4803,122 @@
                 }
             }
         },
+        "/messages/conversations/{kind}/{key}/prefs": {
+            "get": {
+                "security": [
+                    {
+                        "CookieAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "messages"
+                ],
+                "summary": "Get conversation preferences",
+                "operationId": "getConversationPrefs",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "thread kind (dm|tactical)",
+                        "name": "kind",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "peer callsign or tactical label",
+                        "name": "key",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.ConversationPrefsResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/webtypes.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/webtypes.ErrorResponse"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "CookieAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "messages"
+                ],
+                "summary": "Update conversation preferences",
+                "operationId": "putConversationPrefs",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "thread kind (dm|tactical)",
+                        "name": "kind",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "peer callsign or tactical label",
+                        "name": "key",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Preferences",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/dto.ConversationPrefsRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/dto.ConversationPrefsResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/webtypes.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/webtypes.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/messages/events": {
             "get": {
                 "security": [
@@ -9376,6 +9492,36 @@
                 },
                 "space_freq": {
                     "type": "integer"
+                }
+            }
+        },
+        "dto.ConversationPrefsRequest": {
+            "type": "object",
+            "properties": {
+                "send_path": {
+                    "description": "SendPath overrides transport for this conversation. Empty ('')\nmeans \"inherit the global fallback policy\"; otherwise one of\nrf_only | is_only | both.",
+                    "type": "string"
+                },
+                "wait_for_ack": {
+                    "description": "WaitForAck, when false, sends DMs to this contact once and skips\nthe retry ladder (no re-sends) — for handhelds that never ACK.\nDefaults true.",
+                    "type": "boolean"
+                }
+            }
+        },
+        "dto.ConversationPrefsResponse": {
+            "type": "object",
+            "properties": {
+                "send_path": {
+                    "type": "string"
+                },
+                "thread_key": {
+                    "type": "string"
+                },
+                "thread_kind": {
+                    "type": "string"
+                },
+                "wait_for_ack": {
+                    "type": "boolean"
                 }
             }
         },

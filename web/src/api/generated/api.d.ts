@@ -1107,6 +1107,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/messages/conversations/{kind}/{key}/prefs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get conversation preferences */
+        get: operations["getConversationPrefs"];
+        /** Update conversation preferences */
+        put: operations["putConversationPrefs"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/messages/events": {
         parameters: {
             query?: never;
@@ -2556,6 +2574,26 @@ export interface components {
             profile?: string;
             ptt?: components["schemas"]["dto.ChannelPtt"];
             space_freq?: number;
+        };
+        "dto.ConversationPrefsRequest": {
+            /**
+             * @description SendPath overrides transport for this conversation. Empty ('')
+             *     means "inherit the global fallback policy"; otherwise one of
+             *     rf_only | is_only | both.
+             */
+            send_path?: string;
+            /**
+             * @description WaitForAck, when false, sends DMs to this contact once and skips
+             *     the retry ladder (no re-sends) — for handhelds that never ACK.
+             *     Defaults true.
+             */
+            wait_for_ack?: boolean;
+        };
+        "dto.ConversationPrefsResponse": {
+            send_path?: string;
+            thread_key?: string;
+            thread_kind?: string;
+            wait_for_ack?: boolean;
         };
         "dto.ConversationSummary": {
             alias?: string;
@@ -7987,6 +8025,97 @@ export interface operations {
             };
             /** @description Service Unavailable */
             503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["webtypes.ErrorResponse"];
+                };
+            };
+        };
+    };
+    getConversationPrefs: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description thread kind (dm|tactical) */
+                kind: string;
+                /** @description peer callsign or tactical label */
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["dto.ConversationPrefsResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["webtypes.ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["webtypes.ErrorResponse"];
+                };
+            };
+        };
+    };
+    putConversationPrefs: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description thread kind (dm|tactical) */
+                kind: string;
+                /** @description peer callsign or tactical label */
+                key: string;
+            };
+            cookie?: never;
+        };
+        /** @description Preferences */
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["dto.ConversationPrefsRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["dto.ConversationPrefsResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["webtypes.ErrorResponse"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
                 headers: {
                     [name: string]: unknown;
                 };
