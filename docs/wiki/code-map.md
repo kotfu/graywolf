@@ -183,8 +183,8 @@ in the new-message dialog. Zero = the configured default `tx_channel`.
 |---|---|
 | Request field | `pkg/messages/service.go` — `SendMessageRequest.Channel uint32` (0 = default). `SendMessage` stamps it onto the existing `Message.Channel` column so retries reuse it. |
 | Send-time apply | `pkg/messages/sender.go` — `channelFor(row)` returns `row.Channel` when non-zero else the live default `txChannel`; `sendRF` (packet-mode check, availability, `TxSink.Submit`, logs) and `rfAvailable(channel)` route on it. Retry/Resend re-read the persisted row, so no extra plumbing. |
-| REST | `webapi/messages.go` — `sendMessage` copies `dto.SendMessageRequest.Channel` (`*uint32`, already in the DTO) into `svcReq.Channel`. |
-| UI | `web/src/components/messages/ComposeNewModal.svelte` — `<details class="advanced">` with a channel `Select` (non-packet channels + "Default" sentinel, same filter as `MessagesSettings.svelte`); threaded through `Messages.svelte` `handleNewSend`/`optimisticSend` → `sendMessage({channel})`. |
+| REST | `webapi/messages.go` — `sendMessage` copies `dto.SendMessageRequest.Channel` (`*uint32`, already in the DTO) into `svcReq.Channel`, and rejects a packet-mode override with 400 (same `ModeForChannel` guard as `putMessagesConfig`; a missing row reads as APRS, matching the fail-open TX-gating convention, so existence is not hard-validated). |
+| UI | `web/src/components/messages/ComposeNewModal.svelte` — `<details class="advanced">` with a channel `Select` (non-packet channels + "Default" sentinel, same filter as `MessagesSettings.svelte`); threaded through `Messages.svelte` `handleNewSend`/`optimisticSend` → `sendMessage({channel})`. The override resets on the modal's open→true transition (NOT in `close()`), because `ComposeBar` calls `onSend`/`close` once per part of a multi-part message — resetting on close would zero the channel after part 1. |
 
 ## Message call-sign blocklist (issue #465)
 

@@ -33,6 +33,21 @@
   let channel = $state(0);
   let advancedOpen = $state(false);
 
+  // Reset the override when a fresh compose session opens rather than on
+  // close(). A long message is split into several parts and ComposeBar
+  // awaits onSend() once per part; each of those calls close(). Resetting
+  // in close() would zero the channel after part 1, silently sending the
+  // remaining parts on the default channel. Keying the reset off the
+  // open→true transition keeps the choice stable for the whole batch.
+  let wasOpen = false;
+  $effect(() => {
+    if (open && !wasOpen) {
+      channel = 0;
+      advancedOpen = false;
+    }
+    wasOpen = open;
+  });
+
   // Populate the channel list only when Advanced is expanded — most
   // sends never touch it, so we don't poll on every compose.
   $effect(() => {
@@ -50,9 +65,8 @@
 
   function close() {
     open = false;
-    // Reset the override so it never leaks into the next compose.
-    channel = 0;
-    advancedOpen = false;
+    // The override is reset on the next open (see the effect above), not
+    // here — close() fires once per part of a multi-part send.
     onClose?.();
   }
 
