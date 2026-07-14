@@ -277,6 +277,12 @@ func (s *Server) sendMessage(w http.ResponseWriter, r *http.Request) {
 		Text:    req.Text,
 		OurCall: ourCall,
 	}
+	// Per-send channel override from the compose dialog's Advanced
+	// section. Nil defers to the operator's configured default TX
+	// channel; non-zero is persisted on the row so retries reuse it.
+	if req.Channel != nil {
+		svcReq.Channel = *req.Channel
+	}
 	if isInvite {
 		svcReq.Kind = messages.MessageKindInvite
 		svcReq.InviteTactical = strings.ToUpper(strings.TrimSpace(req.InviteTactical))
