@@ -1573,3 +1573,31 @@ Source: [`../../pkg/ax25conn/session.go`](../../pkg/ax25conn/session.go)
 (`submit` tx-failed emit),
 [`../../pkg/ax25conn/manager_test.go`](../../pkg/ax25conn/manager_test.go)
 (`TestManager_FreesTripleAfterFailedConnect`).
+
+### 60. IS→RF third-party wrap emits exactly one `TCPIP` marker
+
+The inner header `wrapThirdParty` builds for an IS→RF third-party packet
+ends in a single canonical `,TCPIP,IGATECALL*` marker. Because the frame
+arrived from APRS-IS, its inbound path may **already** carry a `TCPIP`
+(or `TCPXX`) element ahead of the `qA*` construct, so the wrapper drops
+any inbound `TCPIP`/`TCPXX` path elements (matched on `Address.Call`, so
+an `*` H-bit marker doesn't defeat the match) before appending its own.
+Legitimate elements like `WIDEn-N` are preserved.
+
+*Why:* re-emitting the inbound `TCPIP` produced a duplicated
+`...,TCPIP,TCPIP,IGATECALL*:` inner path (graywolf #488). Kenwood
+handheld radios (e.g. TH-D75) reject that malformed path and silently
+drop the message -- never displaying it or acking it -- breaking IS→RF
+message delivery. Direwolf emits only a single `TCPIP`; matching that is
+what makes the frame acceptable to strict parsers.
+
+*How to apply:* the strip lives in the path loop of
+[`wrapThirdParty`](../../pkg/igate/third_party.go). Never append a second
+`TCPIP` and never trust the inbound path to be marker-free.
+
+Source: [`../../pkg/igate/third_party.go`](../../pkg/igate/third_party.go)
+(`wrapThirdParty`),
+[`../../pkg/igate/third_party_test.go`](../../pkg/igate/third_party_test.go)
+(`TestWrapThirdPartyStripsInboundTCPIP`,
+`TestWrapThirdPartyStripsInboundTCPIPHBit`,
+`TestWrapThirdPartyStripsInboundTCPXX`).
