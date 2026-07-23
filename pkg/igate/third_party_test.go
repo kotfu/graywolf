@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"strings"
 	"testing"
+
+	"github.com/chrissnell/graywolf/pkg/ax25"
 )
 
 // TestWrapThirdPartyPositionPacket exercises the happy path for a plain
@@ -107,6 +109,85 @@ func TestWrapThirdPartyPreservesPath(t *testing.T) {
 	if strings.Contains(got[:strings.Index(got, ":")], "*WIDE") ||
 		strings.Contains(got[:strings.Index(got, ":")], "WIDE1-1*") {
 		t.Fatalf("stray H-bit '*' in inner path: %s", got)
+	}
+}
+
+// TestWrapThirdPartyStripsInboundTCPIP verifies that a TCPIP element
+// already present on the inbound APRS-IS path is not re-emitted, so the
+// inner header carries exactly one canonical ",TCPIP,IGATECALL*" marker.
+// A duplicated "TCPIP,TCPIP" causes Kenwood radios (e.g. TH-D75) to
+// silently drop the igated message (graywolf #488).
+func TestWrapThirdPartyStripsInboundTCPIP(t *testing.T) {
+	inner, err := parseTNC2("W5ABC-7>APZ100,TCPIP,IGATE*,qAC,SERVER::KE7XYZ   :hi{1")
+	if err != nil {
+		t.Fatalf("parseTNC2: %v", err)
+	}
+	wrapped, err := wrapThirdParty(inner, "KE7XYZ")
+	if err != nil {
+		t.Fatalf("wrapThirdParty: %v", err)
+	}
+	got := string(wrapped.Info)
+	want := "}W5ABC-7>APZ100,IGATE,TCPIP,KE7XYZ*::KE7XYZ   :hi{1"
+	if got != want {
+		t.Fatalf("inner info mismatch:\n got: %s\nwant: %s", got, want)
+	}
+	if strings.Contains(got, "TCPIP,TCPIP") {
+		t.Fatalf("duplicate TCPIP not stripped: %s", got)
+	}
+}
+
+// TestWrapThirdPartyStripsInboundTCPIPHBit ensures the strip matches a
+// TCPIP element whose H-bit '*' marker is still set. The frame is built
+// directly (not via parseTNC2, which clears the H-bit) so the address
+// reaches wrapThirdParty with Repeated=true — its String() renders
+// "TCPIP*", which would defeat a String()-based match but not the
+// Call-based one this fix uses.
+func TestWrapThirdPartyStripsInboundTCPIPHBit(t *testing.T) {
+	src, err := ax25.ParseAddress("W5ABC-7")
+	if err != nil {
+		t.Fatalf("ParseAddress src: %v", err)
+	}
+	dest, err := ax25.ParseAddress("APZ100")
+	if err != nil {
+		t.Fatalf("ParseAddress dest: %v", err)
+	}
+	path := []ax25.Address{{Call: "TCPIP", Repeated: true}}
+	inner, err := ax25.NewUIFrame(src, dest, path, []byte("!3725.00N/12158.00W>hi"))
+	if err != nil {
+		t.Fatalf("NewUIFrame: %v", err)
+	}
+	wrapped, err := wrapThirdParty(inner, "KE7XYZ")
+	if err != nil {
+		t.Fatalf("wrapThirdParty: %v", err)
+	}
+	got := string(wrapped.Info)
+	want := "}W5ABC-7>APZ100,TCPIP,KE7XYZ*:!3725.00N/12158.00W>hi"
+	if got != want {
+		t.Fatalf("inner info mismatch:\n got: %s\nwant: %s", got, want)
+	}
+	if strings.Contains(got, "TCPIP,TCPIP") || strings.Contains(got, "TCPIP*,") {
+		t.Fatalf("inbound H-bit TCPIP not stripped: %s", got)
+	}
+}
+
+// TestWrapThirdPartyStripsInboundTCPXX mirrors the TCPIP case for the
+// TCPXX marker (unverified-login APRS-IS traffic).
+func TestWrapThirdPartyStripsInboundTCPXX(t *testing.T) {
+	inner, err := parseTNC2("W5ABC-7>APZ100,TCPXX,qAX,SERVER:!3725.00N/12158.00W>hi")
+	if err != nil {
+		t.Fatalf("parseTNC2: %v", err)
+	}
+	wrapped, err := wrapThirdParty(inner, "KE7XYZ")
+	if err != nil {
+		t.Fatalf("wrapThirdParty: %v", err)
+	}
+	got := string(wrapped.Info)
+	if strings.Contains(got, "TCPXX") {
+		t.Fatalf("inbound TCPXX not stripped: %s", got)
+	}
+	want := "}W5ABC-7>APZ100,TCPIP,KE7XYZ*:!3725.00N/12158.00W>hi"
+	if got != want {
+		t.Fatalf("inner info mismatch:\n got: %s\nwant: %s", got, want)
 	}
 }
 

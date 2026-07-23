@@ -54,6 +54,14 @@ func wrapThirdParty(inner *ax25.Frame, igateCall string) (*ax25.Frame, error) {
 	hdr.WriteByte('>')
 	hdr.WriteString(inner.Dest.String())
 	for _, a := range inner.Path {
+		// Drop any inbound TCPIP/TCPXX markers: the packet arrived from
+		// APRS-IS so its path may already carry one, and we append the
+		// canonical ",TCPIP,IGATECALL*" below. Re-emitting the inbound
+		// one produces a duplicate "TCPIP,TCPIP" that Kenwood radios
+		// (e.g. TH-D75) reject, silently dropping the igated message.
+		if u := strings.ToUpper(a.Call); u == "TCPIP" || u == "TCPXX" {
+			continue
+		}
 		// Strip the H bit for the serialized form; the third-party
 		// inner path is informational and the '*' marker would
 		// confuse downstream parsers.
