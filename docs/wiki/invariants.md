@@ -1601,3 +1601,39 @@ Source: [`../../pkg/igate/third_party.go`](../../pkg/igate/third_party.go)
 (`TestWrapThirdPartyStripsInboundTCPIP`,
 `TestWrapThirdPartyStripsInboundTCPIPHBit`,
 `TestWrapThirdPartyStripsInboundTCPXX`).
+
+### 61. Directed-message addressee matching is SSID-aware, symmetric with the self-filter
+
+The router only claims a directed (DM) message as its own when the
+addressee is an **exact full-call match** of our station call, or a
+**bare base-call address** (no SSID) sharing our base call. A distinct
+SSID of our base call is a separate peer: running as `K0TFU-1` we do
+**not** claim, file, or auto-ACK a message addressed to `K0TFU-7`. Both
+`Router.classify` and the exported `MatchAddressee` helper (used by the
+Actions classifier) route through `callAddressedToUs`, so the DM match
+uses the same SSID granularity as the router self-filter (which already
+compared full calls).
+
+*Why:* the self-filter compared full calls but the addressee match
+compared only base calls, an asymmetry that let one station steal a
+sibling SSID's traffic. The sender then received a false delivery
+confirmation -- a bot ACKed by `K0TFU-1` believed its message reached
+`K0TFU-7` when it never did (graywolf #490). Two stations under one base
+call with different SSIDs are distinct peers by design (same principle as
+invariant on same-base delivery -- `NW5W-5` ↔ `NW5W-13`).
+
+*How to apply:* never reintroduce a base-call-only DM addressee compare.
+A bare base-call address stays generic on purpose -- every station
+sharing the base call answers it. Route any new addressee-matching call
+site through `callAddressedToUs` / `MatchAddressee`, never a hand-rolled
+`baseCall(addr) == baseCall(our)`.
+
+Source: [`../../pkg/messages/router.go`](../../pkg/messages/router.go)
+(`Router.classify`, `MatchAddressee`, `callAddressedToUs`),
+[`../../pkg/messages/router_test.go`](../../pkg/messages/router_test.go)
+(`TestRouterDMDifferentSSIDOfOurBaseNotClaimed`,
+`TestRouterDMExactSSIDMatchClaimed`,
+`TestRouterDMBareBaseCallAddressClaimed`,
+`TestMatchAddresseeSSIDAware`),
+[`../../pkg/actions/classifier.go`](../../pkg/actions/classifier.go)
+(`Classify`).
