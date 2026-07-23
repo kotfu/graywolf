@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"strings"
 	"testing"
+
+	"github.com/chrissnell/graywolf/pkg/ax25"
 )
 
 // TestWrapThirdPartyPositionPacket exercises the happy path for a plain
@@ -134,12 +136,25 @@ func TestWrapThirdPartyStripsInboundTCPIP(t *testing.T) {
 	}
 }
 
-// TestWrapThirdPartyStripsInboundTCPIPHBit ensures the strip also matches
-// a TCPIP element that arrived with its H-bit '*' marker set.
+// TestWrapThirdPartyStripsInboundTCPIPHBit ensures the strip matches a
+// TCPIP element whose H-bit '*' marker is still set. The frame is built
+// directly (not via parseTNC2, which clears the H-bit) so the address
+// reaches wrapThirdParty with Repeated=true — its String() renders
+// "TCPIP*", which would defeat a String()-based match but not the
+// Call-based one this fix uses.
 func TestWrapThirdPartyStripsInboundTCPIPHBit(t *testing.T) {
-	inner, err := parseTNC2("W5ABC-7>APZ100,TCPIP*,qAC,SERVER:!3725.00N/12158.00W>hi")
+	src, err := ax25.ParseAddress("W5ABC-7")
 	if err != nil {
-		t.Fatalf("parseTNC2: %v", err)
+		t.Fatalf("ParseAddress src: %v", err)
+	}
+	dest, err := ax25.ParseAddress("APZ100")
+	if err != nil {
+		t.Fatalf("ParseAddress dest: %v", err)
+	}
+	path := []ax25.Address{{Call: "TCPIP", Repeated: true}}
+	inner, err := ax25.NewUIFrame(src, dest, path, []byte("!3725.00N/12158.00W>hi"))
+	if err != nil {
+		t.Fatalf("NewUIFrame: %v", err)
 	}
 	wrapped, err := wrapThirdParty(inner, "KE7XYZ")
 	if err != nil {
@@ -150,8 +165,8 @@ func TestWrapThirdPartyStripsInboundTCPIPHBit(t *testing.T) {
 	if got != want {
 		t.Fatalf("inner info mismatch:\n got: %s\nwant: %s", got, want)
 	}
-	if strings.Contains(got, "TCPIP,TCPIP") {
-		t.Fatalf("duplicate TCPIP not stripped: %s", got)
+	if strings.Contains(got, "TCPIP,TCPIP") || strings.Contains(got, "TCPIP*,") {
+		t.Fatalf("inbound H-bit TCPIP not stripped: %s", got)
 	}
 }
 
